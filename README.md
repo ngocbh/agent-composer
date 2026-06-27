@@ -121,7 +121,7 @@ API token or secret is stored in the repo.
 |-------|-------|
 | PyPI Project Name | `agent-composer` |
 | Owner | `ngocbh` |
-| Repository name | `agent_compose` |
+| Repository name | `agent-composer` |
 | Workflow name | `publish.yml` |
 | Environment name | `pypi` |
 

@@ -53,8 +53,8 @@ dev = [
 ac = "agent_compose.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ngocbh/agent_compose"
-Repository = "https://github.com/ngocbh/agent_compose"
+Homepage = "https://github.com/ngocbh/agent-composer"
+Repository = "https://github.com/ngocbh/agent-composer"
 
 [tool.setuptools.packages.find]
 where = ["src"]
