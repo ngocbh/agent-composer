@@ -39,6 +39,7 @@ from agent_composer.events import (
     RunResumed,
     RunStarted,
     RunSucceeded,
+    SourceSpan,
     NodeExpanded,
     NodeFailed,
     NodeSucceeded,
@@ -257,12 +258,16 @@ class FlowEngine:
                 try:
                     out = self.flow.nodes[start_id].run(dict(self.run_inputs))
                 except SegmentError as exc:
-                    return RunFailed(error=str(exc), error_type="SegmentError")
+                    # e08 forwards the StartNode's `input_decl` locator (the failing input's
+                    # declaration line) so the CLI boxes it precisely.
+                    return RunFailed(error=str(exc), error_type="SegmentError",
+                                     locator=getattr(exc, "locator", None))
                 self.pool.set(start_id, out.value)
             # boundary asserts: pool-scoped, reading store[START_ID]; byte-stable "assert failed".
             bad = first_failing_assert(self.boundary_asserts, self.pool)
             if bad is not None:
-                return RunFailed(error=f"assert failed: {bad}", error_type="AssertFailed")
+                return RunFailed(error=f"assert failed: {bad}", error_type="AssertFailed",
+                                 locator=SourceSpan(node=None, kind="assert", key=bad))
             # mark START_ID done + fire its out-edges (input-reader data edges + body-root edges).
             # START_ID is NOT enqueued/run; no NodeSucceeded is emitted for it.
             self.sm.mark_node(start_id, NodeState.TAKEN)

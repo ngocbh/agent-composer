@@ -14,6 +14,7 @@ authors: a reserved __-prefixed id, never parseable.
 
 from typing import Optional
 
+from agent_composer.events import SourceSpan
 from agent_composer.nodes.base import Node, NodeKind, Output
 from agent_composer.nodes.binding import ParamDecl
 from agent_composer.state import SegmentError, build_segment_with_type
@@ -80,5 +81,9 @@ class StartNode(Node):
                 # Surface the precise reason (`<value> does not match declared type
                 # <scalar>`) and name which input it was; the bare wrapper's
                 # "expected Optional, got str" lost the scalar that actually failed.
-                raise SegmentError(f"input `{decl.name}` — {exc}") from exc
+                # Carry an `input_decl` locator so the CLI can box the failing input's
+                # declaration line (node=None: it's the flow boundary, not a body node).
+                new = SegmentError(f"input `{decl.name}` — {exc}")
+                new.locator = SourceSpan(node=None, kind="input_decl", key=decl.name)
+                raise new from exc
         return Output(value=apply_defaults(self.input_decls, coerced))
