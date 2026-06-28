@@ -1,0 +1,52 @@
+# Branching — classify, route to one of two branches, then JOIN them back.
+# Exactly one branch runs; the other skips (its ref resolves to null). The `|`
+# coalesce in the output picks whichever branch actually produced a value.
+# Run:  ac run branching.yaml --input review="loved it"
+
+id: branching
+name: branching
+description: Classify a review, route to a matching reply, join the branches.
+
+typedefs:
+  Sentiment: Literal[positive, negative]    # an enum — the AGENT answers one tag
+
+input:
+  review: str
+
+nodes:
+  classify:
+    kind: agent
+    input:
+      review: ${input.review}
+    output: Sentiment
+    prompt: |-
+      Classify the sentiment of this review as exactly one of: positive, negative.
+      Review: ${review}
+
+  route:
+    kind: case
+    on: ${classify.output}         # match a Literal value
+    cases:
+      - when: positive
+        then: thank
+      - when: negative
+        then: apologize
+    # The Literal cases are exhaustive (positive | negative) — no `else:` needed.
+    # On a searched case (no `on:`), use `when: "${score.output} >= 0.5"` etc.
+
+  thank:
+    kind: agent
+    input:
+      review: ${input.review}
+    output: str
+    prompt: "Write a warm thank-you reply to: ${review}"
+
+  apologize:
+    kind: agent
+    input:
+      review: ${input.review}
+    output: str
+    prompt: "Write an apologetic, helpful reply to: ${review}"
+
+# One branch ran, the other resolved null — coalesce to the live one.
+output: ${thank.output | apologize.output}

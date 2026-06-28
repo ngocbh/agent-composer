@@ -1,0 +1,37 @@
+# Pipeline — an AGENT drafts TEXT, a CODE node parses it into a TYPED record.
+# This is THE pattern for "I want a structured/numeric value out of an agent":
+# the agent emits text, code turns text -> shape (an AGENT cannot emit a record).
+#
+# Customize: point `code:` at an importable `module:function` on your PYTHONPATH.
+#   def parse_note(inputs: dict) -> dict:   # receives its bound input record
+#       text = inputs["text"]
+#       return {"title": text.split("\n", 1)[0], "word_count": len(text.split())}
+
+id: pipeline
+name: pipeline
+description: Agent drafts text; code parses it into a typed record.
+
+typedefs:
+  Parsed:                          # a record — fields recurse
+    title: str
+    word_count: int
+
+input:
+  topic: str
+
+nodes:
+  draft:
+    kind: agent
+    input:
+      topic: ${input.topic}
+    output: str
+    prompt: "Write a short note about ${topic}."
+
+  parse:
+    kind: code
+    input:
+      text: ${draft.output}        # the reference IS the edge draft -> parse
+    output: Parsed                 # unlike an AGENT, a CODE node may return ANY type
+    code: your_package.parsing:parse_note
+
+output: ${parse.output}

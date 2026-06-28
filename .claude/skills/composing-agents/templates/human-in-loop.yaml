@@ -1,0 +1,50 @@
+# Human in the loop — draft, PAUSE for a person, then finalize.
+# A `human_input` node ALWAYS suspends and waits for a typed answer (validated
+# against its `output:`). `ac run` will prompt interactively and resume.
+# For "ask only if the model decides it needs to", grant an agent the `ask_user`
+# control instead (see ask-user in examples/).
+
+id: human-in-loop
+name: human_in_loop
+description: Draft, gate on a human approve/revise decision, then finalize.
+
+typedefs:
+  Decision: Literal[approve, revise]
+
+input:
+  topic: str
+
+nodes:
+  draft:
+    kind: agent
+    input:
+      topic: ${input.topic}
+    output: str
+    prompt: "Draft a short announcement about ${topic}."
+
+  review:
+    kind: human_input
+    input:
+      draft: ${draft.output}       # context the prompt may reference (bare ${draft})
+    prompt: |-
+      Here is the draft:
+
+      ${draft}
+
+      Approve as-is or revise? (approve / revise)
+    output: Decision               # the typed answer
+
+  finalize:
+    kind: agent
+    input:
+      draft: ${draft.output}
+      decision: ${review.output}
+    output: str
+    prompt: |-
+      The reviewer said: ${decision}.
+      If "approve", return the draft unchanged. If "revise", improve it.
+
+      Draft:
+      ${draft}
+
+output: ${finalize.output}

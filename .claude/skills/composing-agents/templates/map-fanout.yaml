@@ -1,0 +1,26 @@
+# Fan-out — MAP a child flow over a list, in parallel, then collect.
+# `map` runs the callee once per element of `over:`; ${item} is the current
+# element. The node's value is a list[U] in `over` order.
+# Run from this directory (the child resolves on the search path):
+#   ac run map-fanout.yaml --inputs texts.json     (texts.json = {"texts": ["a","b"]})
+
+id: map-fanout
+name: map_fanout
+description: Summarize each text in a list, in parallel, and collect the results.
+
+uses:
+  summarize: child-summarize
+
+input:
+  texts: list[str]
+
+nodes:
+  each:
+    kind: map
+    over: ${input.texts}           # a list[T]
+    call: summarize                # node value is list[U]
+    parallel: true                 # overlap the element runs
+    input:
+      text: ${item}                # per-element call arg
+
+output: ${each.output}             # list[str], in `over` order

@@ -1,0 +1,20 @@
+# A reusable CHILD flow — summarize one piece of text.
+# Used by call-child.yaml (once) and map-fanout.yaml (per list element).
+# A child is just an ordinary flow: a typed input, nodes, a typed output.
+
+id: child-summarize
+name: child_summarize
+description: Summarize one piece of text in a sentence.
+
+input:
+  text: str
+
+nodes:
+  summarize:
+    kind: agent
+    input:
+      text: ${input.text}
+    output: str
+    prompt: "Summarize in one sentence: ${text}"
+
+output: ${summarize.output}

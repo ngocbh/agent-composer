@@ -1,0 +1,39 @@
+# Tool use — a TOOL node (deterministic, no LLM) feeds an AGENT.
+# A `tool` uses `tool_id:` + `args:` (NOT input:/output:). The id must be
+# registered in Python before the flow runs:
+#
+#   from agent_composer.tools import register_tool
+#
+#   @register_tool("get_facts")
+#   def get_facts(query: str, limit: int = 5) -> list[dict]:
+#       "Fetch recent facts for a subject."   # docstring = what the model sees
+#       ...
+
+id: tool-use
+name: tool_use
+description: Call a registered tool, then have an agent write from the result.
+
+input:
+  subject: str
+
+nodes:
+  facts:
+    kind: tool
+    tool_id: get_facts             # a TOOL_REGISTRY key
+    args:                          # untyped — each value is a ${...} ref or a literal
+      query: ${input.subject}
+      limit: 5
+
+  summary:
+    kind: agent
+    input:
+      subject: ${input.subject}
+      facts: ${facts.output}
+    output: str
+    prompt: |-
+      Using these facts, write a 3-sentence brief on ${subject}.
+
+      Facts:
+      ${facts}
+
+output: ${summary.output}

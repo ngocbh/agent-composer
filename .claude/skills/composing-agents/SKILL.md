@@ -14,6 +14,11 @@ Full reference: [`docs/syntax.md`](../../../docs/syntax.md). Working flows:
 [`examples/`](../../../examples). This skill is the authoring workflow + the parts
 that bite.
 
+**Companions:** [`reference.md`](reference.md) — operators, the three expression
+contexts, type forms, recipes, and gotchas. [`templates/`](templates/) — minimal
+loadable starter flows for each shape (single agent, agent→code pipeline,
+branch+join, tool use, human gate, `call`/`map` composition); copy one and edit.
+
 ## The workflow — author a flow in order
 
 1. **State the function.** Write the one-line job, then its **signature**: what

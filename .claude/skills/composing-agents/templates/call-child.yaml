@@ -1,0 +1,25 @@
+# Composition — call a sibling flow once with `call:`.
+# `uses:` binds an external sibling flow (by filename, no .yaml) to a local alias;
+# `call:` resolves defs-first, else a `uses:` alias. Reference the callee's value
+# downstream as ${one.output} (or ${one.output.field} for a record).
+# Run from this directory so the sibling resolves:
+#   ac run call-child.yaml --input article="<some text>"
+
+id: call-child
+name: call_child
+description: Call the child-summarize flow once.
+
+uses:
+  summarize: child-summarize       # binds child-summarize.yaml on the search path
+
+input:
+  article: str
+
+nodes:
+  one:
+    kind: call
+    call: summarize                # the bound alias
+    input:
+      text: ${input.article}       # sink-bind the child's params
+
+output: ${one.output}
