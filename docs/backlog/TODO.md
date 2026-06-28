@@ -39,6 +39,91 @@ under "Roadmap".
   the first paused node's reasons surface. Rare (needs two nodes pausing in one step). Fix when a real
   multi-node pause flow exists.
 
+- [ ] **Locate the unknown AGENT mode/control `LoadError`.** `build_leaf_node` surfaces an invalid
+  `mode:`/`controls:` as `LoadError(f"node {desc.id!r}: {exc}")` (`compose/build.py:167`) with **no
+  `.line`**, so the error can't point the author at the offending YAML line. Thread the node's source
+  line onto the raised `LoadError` (the descriptor knows its node id; the parser has the line). Narrower
+  and easier than the general "defs-internal error line-mapping" item in DEFER.
+
+- [ ] \ngoc{add options to human input so claude can compose question and also options similar to claude. claude we should have an option to let the agent to redesign or write the question/options depending on the inputs/context. Do human input node should have an option to receive context and option to ask LLM to redesign the questions/options. There are should me multiple questions as well.
+
+- [ ] **Compact mode — a single-node flow authored inline (flow *is* the node).** Let an author
+  collapse the common "one flow, one node" case so they don't have to write a `nodes:` map + a
+  redundant `output: ${greet.output}` wiring step. Instead of the full form, allow the flow's
+  top-level body to carry the node's fields directly — e.g. a flow whose top level is
+  `kind: agent` / `input:` / `output:` / `prompt:` is parsed as a flow with a single implicit node
+  whose output is the flow output. The parser detects the compact shape (a node `kind:` at flow top
+  level, no `nodes:` map) and desugars it into the canonical one-node flow before compile, so the IR
+  and engine are unchanged. **Decided:** the compact form may carry an optional `id:` for the node;
+  when omitted, fall back to an implicit default id. Still open: how flow `input:` maps onto the
+  node's `input:`, and which node kinds are allowed in compact form. Update `docs/syntax.md` + the
+  `composing-agents` skill (with a compact-form template) in the same change.
+
+## LLM config — cascade + per-node opt-out + CLI override
+
+**Decided shape** (promoted from DEFER): `llm_config` propagates parent→child as a per-field
+**fill-the-gap** cascade (most-specific wins); flow-level config is **optional**; a node can opt out of
+the whole cascade with `inherit: false`; the CLI can inject a config as the outermost layer.
+
+Resolve each agent node's **effective** config at compile/expand time so nodes stay pure (the effective
+dict is baked onto the node — no runtime pool reads). Precedence, most→least specific:
+**node → enclosing (sub)flow → parent flow(s) → top flow → CLI-passed config → global runtime defaults.**
+
+- [x] ~~**Flow-level `llm_config` section**~~ — allow a top-level `llm_config:` on a flow (and on a
+  subflow), parsed onto the flow shape (`compose/parser.py`, `compose/shapes.py`). Optional — absent is
+  fine, no loud load error. -- 4ed6f24
+- [x] ~~**Cascade resolution (fill-the-gap, per field, most-specific wins).**~~ Build each agent's effective
+  config by merging the layers above; threads through `call`/`uses:` subflow expansion
+  (`compile/expand.py`) so a child inherits the enclosing/parent flow config for fields it leaves unset. -- ddfc066
+- [x] ~~**`inherit: false` on an agent's `llm_config`**~~ — opt the node out of the **entire** cascade: use
+  only its own dict over global runtime defaults. Whole-node only (per-field locking deferred → see
+  DEFER). Parser field → `AgentNode`; short-circuits cascade resolution. -- 5da4878
+- [x] ~~**CLI flags supply the flow-level config**~~ — `ac run --provider <p> --model <m>` (mirrors the
+  `AGENT_COMPOSER_DEFAULT_*` env vars). The flags don't override `_settings.py` directly; they **supply
+  an outermost `llm_config` layer** that **propagates via the cascade** to every agent that sets none.
+  Precedence is just the cascade (fill-the-gap, most-specific-wins): a node's own `llm_config` wins,
+  `inherit:false` nodes ignore it, and an unset flag falls back to the env-var default. **Open edge:** if
+  a flow *authors its own* top-level `llm_config:` AND the user passes `--model`, the lean is CLI
+  **fills gaps only** (authored flow-level config wins) — not a force-override. Depends on the cascade above. -- d38675f
+- [x] ~~**Docs + skills (same change)**~~ — `docs/syntax.md` (flow-level config, `inherit:false`, CLI flag),
+  `composing-agents` skill (`reference.md` + a template for flow-level config / opt-out), `engine` skill
+  if cascade semantics touch internals. Re-validate touched templates load. -- 4e69909
+- [x] ~~**Tests**~~ — gap-fill merge; node field wins over parent; `inherit:false` isolation; CLI injection
+  as outermost layer; no-config-anywhere falls back to global runtime defaults. -- 6506c35
+
+## Structured AGENT output — wire the declared shape into generation
+
+**Decided shape** (promoted from DEFER). Parts (a) **declare** `output:` ✓ and (b) **enforce** at the
+write boundary ✓ already exist; this builds **(c) generate** — constrain the model to emit the declared
+shape. Layered strategy, with the boundary check kept as the final guarantee (defense-in-depth):
+generation *tries*, the boundary *enforces*, retry catches the residual.
+
+- [ ] **Shape → schema derivation** — convert a node's `output:` `Shape` into a JSON schema / pydantic
+  model that `with_structured_output` accepts. Skip a bare scalar `str` (today's text passthrough); apply
+  for every other declared shape — records, lists, AND scalar `int`/`float` (structured extraction beats
+  text parsing).
+- [ ] **`plain` mode: native structured output** — invoke via `model.with_structured_output(schema)`
+  instead of the raw string return (`modes/plain.py:22`). The primary path.
+- [ ] **Boundary parse-retry** — on a write-boundary mismatch, re-invoke with the error appended
+  (self-correction), capped at N retries, then fail. The existing (b) check stays the enforcer.
+- [ ] **Authorable `retries:` field** — let an author set the self-correction cap per agent node
+  (`retries: 3`, default 2); threads parser → build → `AgentNode` → `AgentRunContext` →
+  `generate_structured(max_retries=...)`.
+- [ ] **Prompt-injection fallback + capability detection** — for providers/models without native
+  structured output, render the schema + "respond with JSON matching this" + parse. Detect support via a
+  **capability flag in the model catalog** (explicit, testable), not try/except.
+- [ ] **`tool_calling` mode: structured final answer** — the loop still calls tools mid-run, but the
+  FINAL answer turn must emit the declared shape (a forced final "emit" step / `with_structured_output`
+  on the synthesis turn). Lands after `plain`.
+- [ ] **Docs + skills (same change)** — `docs/syntax.md` (the `output:` → structured-generation
+  contract; remove the "no JSON/structured parse" caveat at `syntax.md:100`), `composing-agents` skill
+  (`reference.md` + a typed-output template), `engine` skill if the agent contract notes change.
+- [ ] **Tests** — schema derivation per shape; `plain` native path; boundary-retry on a bad emit;
+  prompt-injection fallback for a no-native-support provider; `tool_calling` structured final answer;
+  bare-`str` still passes through untouched.
+
+The **tool** typed-output half stays in DEFER ("Contract gaps") — same theme, separate node kind.
+
 ## CLI
 
 - [ ] **Describe inputs when prompting** — the flow `input:` section is `name: TYPE` (or
@@ -46,7 +131,8 @@ under "Roadmap".
   `name`/`type`/`default`/`required`/`shape`, **no `description`**). Two parts: (a) let an author
   attach a per-input description in the YAML and thread it onto `InputDecl`; (b) when the CLI prompts
   for a missing input (`_prompt_missing`, `cli/run.py`), show that description. Required/optional is
-  already surfaced (required inputs are starred).
+  already surfaced (required inputs are starred). **Scope: flow-level inputs only** — node `inputs:` are
+  wired from refs, never prompted from a human, so they get no description slot.
 
 - [ ] **`cli/utils.py` helpers** referenced by `llm_clients` comments but not built: `ensure_api_key`
   (interactive key prompt) + `confirm_ollama_endpoint`.
