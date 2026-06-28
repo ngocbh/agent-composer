@@ -190,8 +190,7 @@ def test_input_type_mismatch_fails_at_boundary():
     assert result.status == "failed"
     msg = result.error or ""
     assert "input `seed`" in msg          # names the offending input
-    assert "expected float" in msg        # the declared canonical type
-    assert "got str" in msg               # the actual Python type
+    assert "does not match declared type float" in msg  # the precise reason + declared scalar
     assert "high" in msg                  # the offending value
     # the engine never ran: no node produced a value.
     assert not _has_node_output(result)

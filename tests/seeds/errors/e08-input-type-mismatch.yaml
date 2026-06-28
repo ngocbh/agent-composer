@@ -5,7 +5,7 @@
 # No CODE node needed — the value comes straight from the run inputs.
 #
 # Trigger: run with  window: "soon"  (a runtime fixture states its triggering inputs).
-# Expected message: input `window` — expected int, got str "soon".
+# Expected message: input `window` — 'soon' does not match declared type int.
 #
 # (The *write*-boundary variant — a node PRODUCING the wrong type — is the cleaner
 # demonstration but needs a CODE fn that returns a bad value; deferred until the

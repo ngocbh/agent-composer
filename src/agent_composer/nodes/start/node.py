@@ -77,9 +77,8 @@ class StartNode(Node):
             try:
                 build_segment_with_type(decl.shape, coerced[decl.name])
             except SegmentError as exc:
-                value = coerced[decl.name]
-                raise SegmentError(
-                    f"input `{decl.name}` — expected {decl.type}, "
-                    f"got {type(value).__name__} {value!r}"
-                ) from exc
+                # Surface the precise reason (`<value> does not match declared type
+                # <scalar>`) and name which input it was; the bare wrapper's
+                # "expected Optional, got str" lost the scalar that actually failed.
+                raise SegmentError(f"input `{decl.name}` — {exc}") from exc
         return Output(value=apply_defaults(self.input_decls, coerced))

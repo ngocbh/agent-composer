@@ -286,7 +286,11 @@ def _load_flow(text, child_resolver, search_paths, ctx: "_LoadCtx") -> LoadedFlo
     try:
         registry = read_typedefs(f.typedefs)
     except SegmentError as exc:
-        raise LoadError(f"bad typedefs: {exc}") from exc
+        # coarse: the state layer doesn't track source lines, so anchor at the
+        # `typedefs:` section line (the box's context still shows the offending name).
+        raise LoadError(
+            f"bad typedefs: {exc}", line=section_lines(text).get("typedefs")
+        ) from exc
 
     # `system.paths` is honored only when the file's OWN dir is known (loaded WITH
     # search_paths, whose first entry is the file's dir). With no search_paths the own dir
@@ -573,7 +577,12 @@ def _assemble(
             leaf[nid] = node
             flow_wiring[nid] = wiring
         else:
-            node, wiring = build_leaf_node(desc, registry)
+            try:
+                node, wiring = build_leaf_node(desc, registry)
+            except LoadError as exc:  # locate a build failure (e.g. a bad type expr) at the node's line
+                if exc.line is None:
+                    exc.line = n_lines.get(nid)
+                raise
             leaf[nid] = node
             flow_wiring[nid] = wiring
     # producers: each built node's declared output_shape (drives the case `on:` enum
@@ -590,11 +599,16 @@ def _assemble(
     check_ref_map_types(leaf, producers, flow_input_shapes, flow_wiring, n_lines)
 
     # Desugar each `case` to an IfElseNode + its data/control edges.
-    desugars: dict[str, CaseDesugar] = {
-        nid: desugar_case(desc, producers)
-        for nid, desc in descriptors.items()
-        if isinstance(desc, CaseDescriptor)
-    }
+    desugars: dict[str, CaseDesugar] = {}
+    for nid, desc in descriptors.items():
+        if not isinstance(desc, CaseDescriptor):
+            continue
+        try:
+            desugars[nid] = desugar_case(desc, producers)
+        except LoadError as exc:  # locate a malformed/non-exhaustive case at the case node's line
+            if exc.line is None:
+                exc.line = n_lines.get(nid)
+            raise
 
     nodes: dict[str, Node] = dict(leaf)
     for nid, desugar in desugars.items():

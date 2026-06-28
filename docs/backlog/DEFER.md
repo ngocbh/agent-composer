@@ -164,4 +164,7 @@ the checkpoint would remove that host obligation but couples the persisted run t
   locate to the *node's* declaration line rather than the precise binding line — so the highlight can
   land on `  b:` instead of the `  brief: ${frame_typo.output}` line that actually names the bad ref.
   Tightening this would need finer line/column tracking threaded through the ~74 `LoadError` raise
-  sites (the parser already has `start_mark.column`). Decide if worth it.
+  sites (the parser already has `start_mark.column`). Decide if worth it. Two known-coarse anchors:
+  a `bad typedefs:` error lands on the `typedefs:` section line (not the offending typedef name —
+  the `state` layer doesn't track source lines), and a non-exhaustive `case` lands on the case
+  node line (not the uncovered `when:`/`else:` region).

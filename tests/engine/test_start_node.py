@@ -42,7 +42,7 @@ def test_start_e08_shape_mismatch_raises_located_message():
     node = StartNode("__start__", input_decls=[
         _decl("n", "int", required=True, shape=Shape.scalar(SegmentType.INTEGER)),
     ])
-    with pytest.raises(Exception, match=r"input `n` — expected int"):
+    with pytest.raises(Exception, match=r"input `n` — .*does not match declared type int"):
         node.run({"n": ["not", "an", "int"]})
 
 
