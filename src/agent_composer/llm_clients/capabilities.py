@@ -90,6 +90,16 @@ _DEFAULT = ModelCapabilities(
     preferred_structured_method="function_calling",
 )
 
+# Catalog sentinel: a single entry whose structured method is `none`. It exists so the
+# prompt-injection fallback (`structured.py`) is reachable through the *real* capability
+# source on a concrete (provider, model) pair — no real provider is marked no-native today.
+_NO_NATIVE_STRUCTURED = ModelCapabilities(
+    supports_tool_choice=False,
+    supports_json_mode=False,
+    supports_json_schema=False,
+    preferred_structured_method="none",
+)
+
 
 # Exact-ID matches take precedence over pattern matches.
 _BY_ID: dict[str, ModelCapabilities] = {
@@ -106,6 +116,8 @@ _BY_ID: dict[str, ModelCapabilities] = {
     "MiniMax-M2.1": _MINIMAX_THINKING,
     "MiniMax-M2.1-highspeed": _MINIMAX_THINKING,
     "MiniMax-M2": _MINIMAX_THINKING,
+    # Test/escape-hatch sentinel — the only entry with no native structured output.
+    "no-structured-sentinel": _NO_NATIVE_STRUCTURED,
 }
 
 # Forward-compat patterns. New ``deepseek-v5-*`` / ``deepseek-reasoner-*``
@@ -125,3 +137,24 @@ def get_capabilities(model_name: str) -> ModelCapabilities:
         if pattern.match(model_name):
             return caps
     return _DEFAULT
+
+
+# Providers whose langchain client supports `with_structured_output` natively and which are
+# NOT covered by the OpenAI-compat capability table above. For these, native structured
+# output is always available regardless of model id.
+_NATIVE_STRUCTURED_PROVIDERS = frozenset({"anthropic", "google", "azure", "ollama"})
+
+
+def supports_native_structured(provider: str, model: str) -> bool:
+    """Whether `(provider, model)` can use langchain's native `with_structured_output`.
+
+    Native-by-default providers (`anthropic`/`google`/`azure`/`ollama`) always can — they
+    route to their own clients, not the OpenAI-compat table. Every other provider
+    (OpenAI-compatible names, or an unknown future provider) consults the per-model table:
+    a model whose `preferred_structured_method` is `none` (today only the catalog sentinel)
+    has no native path, so the caller falls back to prompt-injection. An unknown model
+    resolves to `_DEFAULT` (`function_calling`) and thus stays native.
+    """
+    if provider.lower() in _NATIVE_STRUCTURED_PROVIDERS:
+        return True
+    return get_capabilities(model).preferred_structured_method != "none"
