@@ -65,6 +65,20 @@ def test_e02_cycle_is_loud():
     assert "a" in msg and "b" in msg  # the stuck nodes are named
 
 
+def test_e02_cycle_carries_dependency_legend():
+    """The cycle error's `.notes` spell out each loop-internal dependency edge."""
+    node_ids, edges, _ = _build("errors/e02-cycle.yaml")
+    with pytest.raises(LoadError) as exc:
+        reject_cycles(edges, node_ids)
+    notes = exc.value.notes or []
+    # Every note reads "<consumer> depends on <producer> (...)" and both stuck nodes appear
+    # on both sides of the loop.
+    assert notes, "a cycle must carry a dependency legend"
+    assert all("depends on" in n for n in notes)
+    joined = " ".join(notes)
+    assert "a depends on b" in joined and "b depends on a" in joined
+
+
 def test_acyclic_seed_passes_cycle_check():
     node_ids, edges, _ = _build("01-structured-agent.yaml")
     reject_cycles(edges, node_ids)  # no raise

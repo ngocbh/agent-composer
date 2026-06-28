@@ -77,24 +77,47 @@ def reject_cycles(
     nodes. Sentinel `__start__`/`__end__` edges can't close a cycle, so passing the
     fully-assembled edge set is fine.
 
-    `node_lines` (node id -> 1-based source line) lets the error locate at the FIRST
-    stuck node's `.yaml` line (a cycle spans nodes, so the first member is the chosen
-    anchor); absent it, `.line` is None.
+    `node_lines` (node id -> 1-based source line) lets the error carry EVERY stuck node's
+    `.yaml` line (a cycle spans nodes, so the renderer can show/highlight both ends); the
+    error's primary `.line` defaults to the first (lowest) of them. Absent it, both are None.
+
+    The error also carries a "why" legend (`LoadError.notes`): one line per dependency edge
+    *inside* the loop — "<consumer> depends on <producer> (<consumer>.input.<group>)" — so the
+    author sees which reference closes the cycle, not just which nodes are in it.
     """
     try:
         _reject_cycles(edges, node_ids)
     except FlowValidationError as exc:
-        line = None
+        stuck = _stuck_nodes(edges, node_ids)
+        lines: list[int] = []
         if node_lines:
-            # A cycle has no single offending line; anchor on the first stuck node
-            # (lowest id — the order `_reject_cycles` reports them). The Kahn check has
-            # already torn down the graph, so re-derive the stuck set from the edges.
-            stuck = _stuck_nodes(edges, node_ids)
-            for nid in stuck:
-                if nid in node_lines:
-                    line = node_lines[nid]
-                    break
-        raise LoadError(str(exc), line=line) from exc
+            # A cycle spans several nodes; surface EVERY stuck node's source line so the
+            # renderer can show and highlight both ends of the loop, not just one anchor.
+            # `.line` (the primary anchor) then defaults to the first (lowest) stuck line.
+            lines = [node_lines[nid] for nid in stuck if nid in node_lines]
+        notes = _cycle_notes(edges, set(stuck))
+        raise LoadError(str(exc), lines=lines or None, notes=notes or None) from exc
+
+
+def _cycle_notes(edges: list[Edge], stuck: "set[str]") -> list[str]:
+    """The "why" legend for a cycle: one line per dependency edge between stuck nodes.
+
+    Each loop-internal edge `from_ -> to` reads as "`to` consumes `from_`", i.e. the consumer
+    depends on the producer; we name the consumer's input group so the author finds the exact
+    `${...}` reference that closes the loop. A data edge cites `to.input.<group>`; a pure
+    ordering edge (`depends_on`/`runs_after`, no data) is labelled as such. Sorted + de-duped
+    for a deterministic legend.
+    """
+    seen: set[tuple[str, str, str]] = set()
+    notes: list[str] = []
+    for e in edges:
+        if e.from_ in stuck and e.to in stuck and e.from_ != e.to:
+            via = f"{e.to}.input.{e.input_group}" if e.input_group else "ordering"
+            key = (e.to, e.from_, via)
+            if key not in seen:
+                seen.add(key)
+                notes.append(f"{e.to} depends on {e.from_} ({via})")
+    return sorted(notes)
 
 
 def _stuck_nodes(edges: list[Edge], node_ids: "set[str]") -> list[str]:

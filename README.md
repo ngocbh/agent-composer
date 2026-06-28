@@ -114,7 +114,7 @@ haven't installed raises a clear `pip install agent-composer[...]` hint.
 ## The `ac` CLI
 
 ```console
-ac run FLOW.yaml [--input k=v]... [--inputs inputs.json] [--quiet]
+ac run FLOW.yaml [--input k=v]... [--inputs inputs.json] [--quiet] [--verbose] [--num-workers N] [--engine-trace]
 ```
 
 - `--input k=v` — set one input (repeatable). Values are coerced to each input's
@@ -124,6 +124,18 @@ ac run FLOW.yaml [--input k=v]... [--inputs inputs.json] [--quiet]
 - Any required input still missing is **prompted interactively**.
 - A flow that suspends on a `HUMAN_INPUT` / `WAIT` node is **resumed interactively** —
   each pause prompts for the awaited value and the run continues to completion.
+- Per-node progress prints to **stderr**: each running node shows a spinner that
+  becomes a green `✓` on success or a red `✗` (plus the error) on failure.
+  `--quiet`/`-q` suppresses it; `--verbose`/`-v` also prints each node's output.
+- `--num-workers`/`-w N` — engine worker pool size. `0` (default) is the
+  single-threaded, deterministic drain; `>=1` runs independent ready nodes (a
+  fan-out) concurrently. The output is the same either way.
+- A flow that fails to **compile** prints a **located** error — a boxed `.yaml`
+  source frame (line numbers, the offending line(s) highlighted; a multi-node error
+  like a cycle highlights every implicated node and prints a legend of the dependency
+  edges that close the loop) titled `file:line`, with the message below — instead of an
+  engine traceback; `--engine-trace` adds the Python traceback for debugging the engine
+  itself.
 
 ### Choosing a provider/model
 

@@ -25,6 +25,11 @@ def cautious(inputs: dict) -> str:
     return f"cautious note for {inputs['topic']}"
 
 
+def join_two(inputs: dict) -> str:
+    # fan-in: concatenate two upstream string outputs (parallel-branch merge tests).
+    return f"{inputs['pro']} | {inputs['con']}"
+
+
 # --- REF/MAP child-flow CODE fns (Ollama-free subflows) --------------------- #
 def make_report(inputs: dict) -> dict:
     # a {report, n} record child codomain (REF re-exports it; MAP collects list of it).

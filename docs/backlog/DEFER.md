@@ -48,6 +48,32 @@ This directory (`docs/backlog/`) is tracked in git and published in the doc site
   map node's bare `${<map>.output}` (a `list[U]` in `over` order). Index-keyed outputs were rejected
   (N is run-time). Cosmetic; revisit.
 
+- [ ] **Declaring the EXPECTED output shape at a `call` site (opaque/external child).** A `call`
+  node's output type is *inherited* from the child flow's declared `output:` — there's no `output:`
+  on a `call` (it's a loud "field not allowed"). When you call an external/untyped subflow whose
+  terminal declares no output type, `${call.output.field}` reads go lenient (no compile check), so the
+  caller has no static way to say "I expect `{label, confidence}`". Today's workarounds: (a) call-site
+  `asserts:` reading `${call.output.field}` — they fire loudly at runtime (a missing field fails the
+  run, not a silent pass); (b) route the opaque output through a typed *validation/coercion* `code`
+  node that re-declares the expected `output:` so the write boundary enforces it. Decide whether a
+  first-class affordance is worth it — e.g. an `expect:`/asserted-`output:` on a `call` that
+  type-checks (not authors) the child's actual output — vs. leaving it to the two workarounds.
+
+  **Proposed direction (note):** make `output:` *optional* on a `call` (today it's a loud "field not
+  allowed"). When present, it is an **author-declared expectation, not an authoring directive**: the
+  engine verifies the declared shape matches the child flow's actual declared `output:` and fails the
+  *load/compile* with a clear mismatch error if they diverge (a "I expected `{label, confidence}` but
+  the child emits `{rating, score}`" diagnostic). When omitted, behavior is unchanged (output type
+  inherited from the child). This differs from the leaf-node `output:` (which *declares/coerces* the
+  node's own output) — on a `call` it would *check against* the child's contract, not define it. Open:
+  how to handle an opaque/untyped child (child declares no `output:`) — degrade to a runtime
+  write-boundary check, or require the child to be typed for the `call`'s `output:` to mean anything.
+
+  The mismatch error must be **located** — pointed at the `output:` key on the `call` node in the
+  author's YAML (line/column), the same way other compile errors carry a source span — so the author
+  sees exactly where the expectation diverges, not just a bare message. (Top-level nodes already stay
+  located; this slots into that path, unlike the deferred defs-internal line-mapping below.)
+
 ## Type system tails
 
 - [ ] **`dict[K, V]` full key/value typing** — no `parse_type`/`Shape` branch yet.
@@ -131,3 +157,11 @@ the checkpoint would remove that host obligation but couples the persisted run t
 - [ ] **defs-internal error line-mapping** — a nested def's internal errors are unlocated (top-level
   stays located); compute nested line maps from the parent compose tree later. (Hard, low value.)
   Same class: synth inline-call downstream errors are unlocated.
+
+- [ ] **Line-precise vs. node-precise compile-error highlight.** The CLI renders a `LoadError` as a
+  boxed `.yaml` source frame with the offending line highlighted (`cli/run.py:_render_load_error`,
+  via `rich.Syntax` + `Panel`), but `LoadError` carries only `.line` (not a column), and many errors
+  locate to the *node's* declaration line rather than the precise binding line — so the highlight can
+  land on `  b:` instead of the `  brief: ${frame_typo.output}` line that actually names the bad ref.
+  Tightening this would need finer line/column tracking threaded through the ~74 `LoadError` raise
+  sites (the parser already has `start_mark.column`). Decide if worth it.

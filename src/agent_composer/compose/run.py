@@ -108,6 +108,7 @@ def run_flow(
     run_id: Optional[str] = None,
     on_event: Optional[EventHook] = None,
     llm_config: Optional[Dict[str, Any]] = None,
+    num_workers: int = 0,
 ) -> RunResult:
     """
     Coerce inputs, seed the variable pool, enforce asserts, and drive the flow to a terminal.
@@ -136,6 +137,10 @@ def run_flow(
         llm_config (`dict[str, Any]`, *optional*, defaults to `None`):
             Outermost cascade layer (CLI `--provider`/`--model`); fills only the gaps a
             flow leaves unset, then `model_from_config` applies env/global defaults.
+        num_workers (`int`, *optional*, defaults to `0`):
+            Engine drive mode. `0` is the single-threaded inline drain (deterministic
+            event order); `>=1` spawns a worker pool of that size so independent ready
+            nodes (a fan-out) run concurrently. The result is worker-count-independent.
 
     Returns:
         `RunResult`:
@@ -171,6 +176,7 @@ def run_flow(
     # e08 SegmentError + the false-boundary-assert both come back as a RunFailed engine event.
     engine = FlowEngine(
         loaded.compiled, pool,
+        num_workers=num_workers,
         run_inputs=coerced, boundary_asserts=loaded.asserts.boundary,
     )
     events: List[Any] = []
