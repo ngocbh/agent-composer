@@ -210,7 +210,7 @@ def _producer_of(src: str) -> Optional[str]:
 # --------------------------------------------------------------------------- #
 
 
-def clone_continuation_pair(pair, callsite: str) -> ClonedSubgraph:
+def clone_continuation_pair(pair, callsite: str, *, output_shape=None, retries: int = 2) -> ClonedSubgraph:
     """Materialize the agent-pause continuation PAIR namespaced at `callsite`.
 
     `pair` is `[human_input_desc, resume_desc]` from `agent_step`'s `Enqueue`. The
@@ -221,7 +221,13 @@ def clone_continuation_pair(pair, callsite: str) -> ClonedSubgraph:
     its single `answer` param; the data edge for that ref is synthesized via the SAME producer
     derivation `clone_child`/`build.py` use (`f"{producer}->{consumer}#{i}"`), so the pool ref
     and the edge agree on `hi_id`. Pure — the dispatcher performs the impure
-    append/register/seed."""
+    append/register/seed.
+
+    `output_shape`/`retries` carry the SPAWNER's declared output Shape and self-correction cap
+    onto the resume node so a resumed agent with a non-text `output:` still emits the declared
+    shape on its final turn (the dispatcher reads them off `flow.nodes[spawner_id]`; they are
+    not serialized — restore re-grows from the compiled spawner). For a multi-pause chain each
+    resume node becomes the next segment's spawner, so the shape propagates segment to segment."""
     from agent_composer.nodes.agent.node import AgentNode, Resume
     from agent_composer.nodes.human_input import HumanInputNode
 
@@ -241,7 +247,11 @@ def clone_continuation_pair(pair, callsite: str) -> ClonedSubgraph:
         tools=resume_desc.get("tools"),
         controls=resume_desc.get("controls"),
         mode=resume_desc.get("mode", "tool_calling"),
+        retries=retries,
     )
+    # The Resume entry's declared output Shape is set as node DATA (AgentNode.__init__ takes no
+    # output_shape param — the compiler stamps it; here the dispatcher supplies the spawner's).
+    resume_node.output_shape = output_shape
 
     # Rewrite the answer forward-ref to the NAMESPACED node-first ref.
     answer_ref = f"${{{hi_id}.output}}"

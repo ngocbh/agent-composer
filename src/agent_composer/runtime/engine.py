@@ -679,7 +679,18 @@ class FlowEngine:
         retention, no pop). alias chains to origin (pop). depth is carried UNCHANGED (a K-pause
         agent is NOT recursion)."""
         pair = [hi_desc, resume_desc]
-        cloned = clone_continuation_pair(pair, callsite=spawner_id)
+        # Carry the spawner's declared output Shape + self-correction cap onto the resume node so a
+        # resumed agent with a non-text `output:` still emits the declared shape on its final turn
+        # (else the alias-filler write boundary rejects the plain-text answer). build.py stamps
+        # `output_shape` on the compiled agent; each resume node re-stamps it (expand.py), so it
+        # propagates segment to segment across a multi-pause chain.
+        spawner = self.flow.nodes[spawner_id]
+        cloned = clone_continuation_pair(
+            pair,
+            callsite=spawner_id,
+            output_shape=getattr(spawner, "output_shape", None),
+            retries=getattr(spawner, "retries", 2),
+        )
         with self.sm.lock:                      # append + register atomically
             self.flow.add_subgraph(cloned.nodes, cloned.edges, cloned.wiring)
             self.sm.register(list(cloned.nodes), cloned.edges)
