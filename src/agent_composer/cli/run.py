@@ -27,9 +27,15 @@ from rich.text import Text
 from agent_composer.compile.model import END_ID, START_ID
 from agent_composer.compose.errors import LoadError
 from agent_composer.compose.loader import load_flow
-from agent_composer.compose.parser import node_lines
+from agent_composer.compose.parser import (
+    assert_lines,
+    input_decl_lines,
+    node_field_lines,
+    node_input_lines,
+    node_lines,
+)
 from agent_composer.compose.run import RunResult, resume_command, resume_flow, run_flow
-from agent_composer.events import NodeFailed
+from agent_composer.events import NodeFailed, SourceSpan
 from agent_composer.state.segments import SegmentType
 
 console = Console()
@@ -38,6 +44,32 @@ err_console = Console(stderr=True)
 # Lines of `.yaml` context shown above and below the offending line in the error panel
 # (a window, so a large flow doesn't dump in full — mirrors a Python traceback's code frame).
 _ERR_CONTEXT = 5
+
+# When a failure carries no precise locator, fall back to the best sub-line for the node's
+# kind before the node header. Keyed by the field name the parser exposes in
+# `node_field_lines` (presence avoids threading the loaded IR): a CODE node -> its `code:`
+# line. Ordered: the first field present on the node wins.
+_KIND_FALLBACK_FIELDS = ("code",)
+
+
+def _locate(span: Optional[SourceSpan], text: str) -> Optional[int]:
+    """Resolve a `SourceSpan` to a 1-based YAML line via the parser sub-line maps, or `None`.
+
+    Each `kind` resolves against its own map: an `input` binding against `node_input_lines`,
+    an `assert` expr against `assert_lines` (keyed `(node|None, expr)`), an `input_decl`
+    against `input_decl_lines`, a `field` against `node_field_lines`. `None`/an unknown kind/
+    a key absent from its map yields `None` so the caller can fall back."""
+    if span is None:
+        return None
+    if span.kind == "input":
+        return node_input_lines(text).get(span.node, {}).get(span.key)
+    if span.kind == "assert":
+        return assert_lines(text).get((span.node, span.key))
+    if span.kind == "input_decl":
+        return input_decl_lines(text).get(span.key)
+    if span.kind == "field":
+        return node_field_lines(text).get(span.node, {}).get(span.key)
+    return None
 
 
 def _render_source_frame(text: str, marks, title: str, message: str) -> None:
@@ -82,17 +114,32 @@ def _render_load_error(err: LoadError, flow: Path, text: str) -> None:
 
 
 def _render_run_error(result: RunResult, flow: Path, text: str) -> None:
-    """Print a runtime failure as a located `.yaml` frame at the node that raised.
+    """Print a runtime failure as a located `.yaml` frame at its PRECISE originating line.
 
-    A node failure carries the offending node id (the last `NodeFailed` event); map it to its
-    source line (`node_lines`) and box the frame there, mirroring the compile-error UX. A failure
-    with no node behind it — a false boundary/post assert, or an input-coercion error at the run
-    boundary — has no node line to point at, so it falls back to a plain `run <status>: <message>`
-    line."""
+    The failure's `SourceSpan` locator (from the last `NodeFailed`, or the flow-level
+    `RunResult.locator` when no node is behind it) names exactly where the run broke — an
+    input binding, an assert expr, an input decl. The line is resolved by a three-step chain:
+
+    1. the precise locator line (`_locate`);
+    2. else, when a node is known, the best sub-line for its kind (`_KIND_FALLBACK_FIELDS`,
+       e.g. a code node's `code:` line), then the node header (`node_lines`);
+    3. else a plain `run <status>: <message>` line (no frame).
+    """
     failed = [e for e in result.events if isinstance(e, NodeFailed)]
-    node_id = failed[-1].node_id if failed else None
-    line = node_lines(text).get(node_id) if node_id else None
+    nf = failed[-1] if failed else None
+    span = nf.locator if nf is not None else getattr(result, "locator", None)
+    node_id = nf.node_id if nf is not None else (span.node if span is not None else None)
     message = result.error or "(no detail)"
+
+    line = _locate(span, text)
+    if line is None and node_id:
+        fields = node_field_lines(text).get(node_id, {})
+        for field_name in _KIND_FALLBACK_FIELDS:
+            if field_name in fields:
+                line = fields[field_name]
+                break
+        if line is None:
+            line = node_lines(text).get(node_id)
     if line is None:
         err_console.print(f"[red]run {result.status}: {message}[/red]")
         return

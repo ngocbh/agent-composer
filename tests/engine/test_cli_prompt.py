@@ -148,9 +148,10 @@ def test_prompt_skips_already_supplied(monkeypatch):
     assert fake.labels == []          # no prompt issued
 
 
-# --- _render_run_error: a runtime failure boxes the .yaml at the failing node ------ #
+# --- _render_run_error: a runtime failure boxes the .yaml at the PRECISE line ------ #
 def test_run_error_boxes_failing_node(monkeypatch):
-    # e07 omits `as_of` -> the `report` node's `:?` fires at bind time -> NodeFailed.
+    # e07 omits `as_of` -> the `report` node's `:?` fires at bind time -> NodeFailed
+    # carrying an input locator -> the box points at the `as_of:` binding, not the header.
     flow = _ERRORS / "e07-required-missing.yaml"
     text = flow.read_text()
     result = run_flow(load_flow(text, search_paths=[flow.parent]), {"topic": "X"})
@@ -158,9 +159,22 @@ def test_run_error_boxes_failing_node(monkeypatch):
     buf = _sink(monkeypatch)
     _render_run_error(result, flow, text)
     out = buf.getvalue()
-    assert "e07-required-missing.yaml:19" in out   # boxed frame titled at the node line
-    assert "report" in out                         # the highlighted node
+    assert "e07-required-missing.yaml:23" in out   # the as_of binding, not the node header
+    assert "report" in out                         # still inside the source window
     assert "as_of is required for the report" in out
+
+
+def test_run_error_kind_fallback_for_code_raise(monkeypatch):
+    # e20's code callable raises -> NodeFailed with no precise locator -> the chain falls
+    # back to the node-kind best sub-line: a code node's `code:` field (not the header, not plain).
+    flow = _ERRORS / "e20-code-raises.yaml"
+    text = flow.read_text()
+    result = run_flow(load_flow(text, search_paths=[flow.parent]), {"topic": "X"})
+    assert result.status == "failed"
+    buf = _sink(monkeypatch)
+    _render_run_error(result, flow, text)
+    out = buf.getvalue()
+    assert "╭" in out and "code:" in out           # boxed at the `code:` field
 
 
 def test_run_error_plain_when_no_node(monkeypatch):
