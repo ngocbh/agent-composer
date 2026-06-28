@@ -14,7 +14,8 @@ Copy, rename, and edit.
 | Template | Shape it shows |
 |----------|----------------|
 | [`minimal.yaml`](templates/minimal.yaml) | one AGENT, `str` in/out |
-| [`pipeline.yaml`](templates/pipeline.yaml) | AGENT (text) → CODE (typed record) — how to get structured output |
+| [`pipeline.yaml`](templates/pipeline.yaml) | AGENT → CODE (typed record) — deterministic post-processing |
+| [`typed_output.yaml`](templates/typed_output.yaml) | AGENT with a record `output:` — structured generation + `retries:` |
 | [`branching.yaml`](templates/branching.yaml) | classify → `case` route → `\|` join |
 | [`tool-use.yaml`](templates/tool-use.yaml) | a `tool` node (no LLM) feeding an AGENT |
 | [`human-in-loop.yaml`](templates/human-in-loop.yaml) | a `human_input` pause/gate |
@@ -77,9 +78,11 @@ isn't supplied at all.
 
 ## Recipes
 
-**Get a structured / numeric value out of an agent.** An AGENT returns text only.
-Feed its `str` into a `code` node that parses text → the typed shape (see
-`pipeline.yaml`). Never declare a record/`float`/`int` as an AGENT `output:`.
+**Get a structured / numeric value out of an agent.** Declare the typed shape directly
+as the AGENT's `output:` — a record, `float`/`int`/`bool`, or list switches the agent to
+**structured generation** (the engine derives a schema and the model emits a conforming
+value, retried up to `retries:` times on deviation; see `typed_output.yaml`). Use a
+downstream `code` node only when you need deterministic post-processing of the value.
 
 **Branch and rejoin.** A `case` runs exactly one branch; the others skip and their
 refs resolve to null. Always coalesce the branches back with `${a | b | c}` (see
@@ -107,7 +110,9 @@ Reference its object fields downstream as `${node.output.field}`.
   input:
     x: ${input.x}
   ```
-- **AGENT `output:` is `str` or `Literal[...]` only** — no record/number/bool/object.
+- **AGENT `output:` may be any shape** — a bare `str`/`Literal[...]` keeps it a text
+  producer; a record/number/bool/list switches it to structured generation (schema-checked
+  at the write boundary, `retries:`-capped self-correction).
 - **Prompts see only LOCAL inputs.** Inside `prompt:` you may reference only names
   the node declares in its own `input:` block, written bare (`${name}`). Pool refs
   (`${input.x}`, `${other.output}`) go in the `input:` block first.

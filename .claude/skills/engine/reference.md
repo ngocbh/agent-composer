@@ -94,6 +94,15 @@ model made enforceable.
   the static graph, so the effective configs must be baked on first.
 - **Closed `NodeKind` + explicit `match`**; **single-writer** (workers are pure
   executors, the dispatcher is the only mutator); **single-process CLI target**.
+- **AGENT structured output** — a non-text `output:` Shape switches an agent from text
+  producer to structured generation: `shape_to_schema` (`nodes/agent/structured.py`)
+  derives a pydantic schema, the mode generates a conforming value (native
+  `with_structured_output`, or a JSON prompt-injection fallback gated by
+  `supports_native_structured(provider, model)`), with `retries:`-capped self-correction.
+  Three-part contract: **generate-tries** (the schema asks), **boundary-enforces**
+  (`pool.set(..., declared=output_shape)` validates — on both the primary path and a
+  resumed agent's alias-filler path), **retry-catches** (a deviation is fed back and
+  re-asked). A bare `str`/`Literal[...]` keeps the text path.
 
 ## Layer ladder (where code goes)
 

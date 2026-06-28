@@ -119,13 +119,15 @@ classify:
     Classify the sentiment of: ${text}
     Answer with exactly one of: positive, neutral, negative.
 ```
-**CRITICAL — an AGENT returns plain text.** Its `output:` must be `str` or a
-`Literal[...]` enum (the model answers with one tag). It **cannot** be a record,
-`float`, `int`, `bool`, or `object` — there is no JSON/structured parse. To
-produce a structured or numeric value, feed the agent's text into a `code` or
-`model` node. To give an agent ordinary tools: `tools: [tool_id, ...]` (requires
-`mode: tool_calling`). A node may pin its model via `llm_config:`; otherwise the
-environment defaults apply.
+**An AGENT's `output:` may be any shape.** A bare `str` or a `Literal[...]` enum
+(the model answers with one tag) keeps the agent a text producer. A record,
+`float`, `int`, `bool`, or list switches it to **structured generation** — the
+engine derives a schema from `output:` and the model emits a conforming value
+(native structured output, or a JSON fallback for providers that lack it), validated
+at the write boundary and retried up to `retries:` times (default 2) on deviation.
+Use a downstream `code`/`model` node only for deterministic post-processing. To give
+an agent ordinary tools: `tools: [tool_id, ...]` (requires `mode: tool_calling`).
+A node may pin its model via `llm_config:`; otherwise the environment defaults apply.
 
 ### `code` — deterministic Python
 ```yaml
@@ -257,7 +259,7 @@ result. For a *guaranteed* gate use `human_input`; for "ask only if needed" use
 ## Authoring checklist
 - [ ] `input:` and `output:` are fully typed; every type used is a scalar/form or a `typedefs:` entry.
 - [ ] Every node consumes upstream values via `${...}` in its `input:` (the edges are inferred).
-- [ ] Every `agent` `output:` is `str` or `Literal[...]` — structured/numeric values come from `code`/`model`.
+- [ ] Every `agent` `output:` is typed — `str`/`Literal[...]` for text, or a record/number/bool/list for structured generation.
 - [ ] Every prompt references only the node's own local input names.
 - [ ] Each `case` has an `else:` (or its `Literal` cases are exhaustive); branches are joined with `|`.
 - [ ] `tool` ids are registered; `code` `module:function` is importable; `call`/`uses:` targets resolve on the search path.

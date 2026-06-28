@@ -95,13 +95,36 @@ classify:
     Answer with exactly one of: positive, neutral, negative.
 ```
 
-!!! warning "AGENT outputs are text — `str` or `Literal[...]` only"
-    An AGENT returns plain text, which the engine binds against the declared
-    `output:` with no JSON/structured parse. So an AGENT's `output:` can be
-    `str` or a `Literal[...]` enum (the model answers with one tag) — but
-    **not** a record, `float`, `int`, `bool`, or `object`. To produce a
-    structured or numeric value, compute it in a `code` / `model` node that
-    consumes the agent's text.
+An AGENT's `output:` may be any declared shape. A bare `str` (or a `Literal[...]`
+enum, where the model answers with one tag) keeps the agent a **text producer**.
+Any richer shape — a record, a `float`/`int`/`bool`, or a list — switches the
+agent to **structured generation**: the engine derives a schema from the declared
+`output:` and asks the model to emit a conforming value (via the provider's native
+structured output, or a JSON prompt-injection fallback for providers that lack it).
+The result is validated at the write boundary like every other node output.
+
+```yaml
+extract:
+  kind: agent
+  input:
+    text: ${input.text}
+  output:                       # a record shape -> structured generation
+    name: str
+    score: int
+  prompt: |-
+    Extract the person's name and a 0-10 score from: ${text}
+```
+
+If the model deviates from the schema, the engine feeds the error back and retries
+up to `retries:` times (default 2):
+
+```yaml
+extract:
+  kind: agent
+  retries: 3                    # extra self-correction attempts (default 2)
+  output: {name: str, score: int}
+  prompt: ...
+```
 
 A node can pin its own provider/model; otherwise the environment defaults apply
 (see [Installation](installation.md)).

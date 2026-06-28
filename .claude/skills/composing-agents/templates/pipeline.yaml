@@ -1,6 +1,7 @@
 # Pipeline — an AGENT drafts TEXT, a CODE node parses it into a TYPED record.
-# This is THE pattern for "I want a structured/numeric value out of an agent":
-# the agent emits text, code turns text -> shape (an AGENT cannot emit a record).
+# Use this when you want DETERMINISTIC post-processing of an agent's text (parsing,
+# arithmetic, validation in code). To have the agent emit a structured value directly,
+# declare the typed shape as its `output:` instead — see `typed_output.yaml`.
 #
 # Customize: point `code:` at an importable `module:function` on your PYTHONPATH.
 #   def parse_note(inputs: dict) -> dict:   # receives its bound input record
