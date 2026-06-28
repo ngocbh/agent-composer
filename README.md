@@ -121,7 +121,10 @@ ac run FLOW.yaml [--input k=v]... [--inputs inputs.json] [--quiet] [--verbose] [
   declared type.
 - `--inputs file.json` — load inputs from a JSON object. `--input` flags override
   individual keys.
-- Any required input still missing is **prompted interactively**.
+- At run start a boxed **banner** (to stderr) names the flow being run — its
+  `name`, `version`, and `description` — unless `--quiet`.
+- Any required input still missing is **prompted interactively** — each prompt
+  labelled with the input's type, a required (`*`)/optional mark, and any default.
 - A flow that suspends on a `HUMAN_INPUT` / `WAIT` node is **resumed interactively** —
   each pause prompts for the awaited value and the run continues to completion.
 - Per-node progress prints to **stderr**: each running node shows a spinner that

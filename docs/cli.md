@@ -28,17 +28,36 @@ ac run flow.yaml --inputs base.json --input audience="execs"
 ac run examples/hello.yaml
 ```
 
+### The "Running flow" banner
+
+At the start of every run (unless `--quiet`), `ac` prints a boxed banner to
+**stderr** identifying what it is about to run — the flow's `name:`, its
+`version:` (if set), and its `description:` — so you can confirm you picked the
+right file:
+
+```console
+╭──────────────────────────────────────────────────────────╮
+│ Running flow: debate  (version: v2)                        │
+│ Description: Frame a question, argue both sides, then decide. │
+╰──────────────────────────────────────────────────────────╯
+```
+
+A flow with no `name`/`description`/`version` prints no banner.
+
 ### The interactive prompt
 
-When a required input is missing, `ac` prompts for it. The widget follows the
-declared type:
+When a required input is missing, `ac` prompts for it. The widget follows each
+input's declared type:
 
 - a `bool` input → a yes/no confirm,
 - a `Literal[...]` enum → a select list of the allowed tags,
 - anything else → a free-text entry.
 
-Required inputs are marked with a `*`. An optional input left blank is skipped
-(its default applies). Cancelling a prompt (Ctrl-C / Esc) cancels the run.
+Each prompt's label carries the input's declared **type**, a required (`*`) /
+`optional` mark, and any **default** — e.g. `topic (str) *`,
+`as_of (Optional[date]) [optional]`, `window (int) [default: 30]`. An optional
+input left blank is skipped (its default applies). Cancelling a prompt
+(Ctrl-C / Esc) cancels the run.
 
 !!! note
     The prompt needs a real terminal (TTY). In a non-interactive context

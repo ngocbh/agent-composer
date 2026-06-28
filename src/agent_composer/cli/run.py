@@ -177,17 +177,63 @@ def _parse_kv(pairs: List[str]) -> Dict[str, Any]:
     return out
 
 
+def _input_label(decl: Any) -> str:
+    """The questionary prompt label for one declared input.
+
+    Carries the input's name, declared `type`, a required (`*`) / `optional` mark, and
+    any default — so an author at the prompt sees what is expected without reading the
+    `.yaml`. Shapes:
+        `topic (str) *`                       (required)
+        `as_of (Optional[date]) [optional]`   (optional, no default)
+        `window (int) [default: 30]`          (optional, has a default)
+    """
+    parts = [decl.name]
+    if getattr(decl, "type", None):
+        parts.append(f"({decl.type})")
+    if decl.required:
+        parts.append("*")
+    elif decl.default is not None:
+        parts.append(f"[default: {decl.default}]")
+    else:
+        parts.append("[optional]")
+    return " ".join(parts)
+
+
+def _flow_banner(
+    name: Optional[str], description: Optional[str], version: Optional[str] = None
+) -> Optional[Panel]:
+    """The "what am I running" banner printed at the start of a run (to stderr).
+
+    A boxed panel of the flow's identity — `name`/`description`/`version` — so the
+    author sees what the run is before inputs/progress. Returns `None` when there is no
+    metadata at all (nothing to show)."""
+    if not (name or description or version):
+        return None
+    body = Text()
+    body.append("Running flow: ", style="bold")
+    body.append(name or "(unnamed)")
+    if version:
+        body.append(f"  (version: {version})", style="dim")
+    if description:
+        body.append("\nDescription: ", style="bold")
+        body.append(description)
+    return Panel(body, border_style="cyan", expand=False)
+
+
 def _prompt_missing(decls: List[Any], have: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Prompt for each declared input not already supplied. Returns the gathered values,
     or None if the user cancels (Ctrl-C / Esc). The widget follows the declared type: a
-    boolean is a confirm, a `Literal[...]` enum is a select, everything else is free text."""
+    boolean is a confirm, a `Literal[...]` enum is a select, everything else is free text.
+
+    Each prompt's label carries the input's type + a required/optional mark + default
+    (see `_input_label`)."""
     import questionary
 
     gathered: Dict[str, Any] = {}
     for decl in decls:
         if decl.name in have:
             continue
-        label = decl.name + (" *" if decl.required else "")
+        label = _input_label(decl)
         shape = decl.shape
         if shape.seg_type == SegmentType.BOOLEAN:
             value = questionary.confirm(label, default=bool(decl.default)).ask()
@@ -292,6 +338,13 @@ def run(
         if engine_trace:
             err_console.print_exception()
         raise typer.Exit(code=1)
+
+    # The "what am I running" banner (flow name/description/version) — stderr, like
+    # progress; suppressed under --quiet.
+    if not quiet:
+        banner = _flow_banner(loaded.name, loaded.description, loaded.version)
+        if banner is not None:
+            err_console.print(banner)
 
     supplied: Dict[str, Any] = {}
     if inputs is not None:

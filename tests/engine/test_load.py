@@ -297,3 +297,23 @@ def test_loaded_flow_version_none_when_absent():
         'output: {r: "${a.output}"}\n'
     )
     assert lf.version is None
+
+
+def test_loaded_flow_carries_name_and_description():
+    from agent_composer import load_flow
+    lf = load_flow(
+        'id: x\nname: my_flow\ndescription: Does a thing.\n'
+        'nodes:\n  a: {kind: code, code: m:f}\n'
+        'output: {r: "${a.output}"}\n'
+    )
+    assert lf.name == "my_flow"
+    assert lf.description == "Does a thing."
+
+
+def test_loaded_flow_description_none_when_absent():
+    from agent_composer import load_flow
+    lf = load_flow(
+        'id: x\nname: x\nnodes:\n  a: {kind: code, code: m:f}\n'
+        'output: {r: "${a.output}"}\n'
+    )
+    assert lf.description is None

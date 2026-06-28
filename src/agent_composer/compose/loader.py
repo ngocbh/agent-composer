@@ -103,12 +103,20 @@ class LoadedFlow:
         version (`str`, *optional*, defaults to `None`):
             The flow's declared `version:`, or `None` if unversioned. Used to validate a
             `uses: ref@<version>` pin against the resolved file.
+        name (`str`, *optional*, defaults to `None`):
+            The flow's declared `name:` — human-facing metadata (e.g. the CLI's
+            interactive-prompt header). `None` for a `defs:` sub-flow, which has no name.
+        description (`str`, *optional*, defaults to `None`):
+            The flow's declared `description:`, or `None` if absent — human-facing
+            metadata (e.g. the CLI's interactive-prompt header).
     """
 
     compiled: CompiledFlow
     input: list[InputDecl]
     asserts: AssertSet
     version: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
 
 
 def _flow_outputs(outputs) -> list[FlowOutput]:
@@ -326,6 +334,8 @@ def _load_flow(text, child_resolver, search_paths, ctx: "_LoadCtx") -> LoadedFlo
         s_lines=section_lines(text),
         uses_aliases=set(f.uses),
         version=f.version,
+        name=f.name,
+        description=f.description,
         flow_llm_config=f.llm_config,
     )
 
@@ -494,6 +504,8 @@ def _assemble(
     s_lines: dict,
     uses_aliases: set = frozenset(),
     version: Optional[str] = None,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
     flow_llm_config: Optional[dict] = None,
 ) -> LoadedFlow:
     """Assemble parsed sections into a `LoadedFlow` — the post-parse pipeline shared by
@@ -668,4 +680,7 @@ def _assemble(
 
     compiled = CompiledFlow.from_parts(nodes, edges, outputs=flow_outputs, wiring=flow_wiring,
                                        flow_llm_config=flow_llm_config or {})
-    return LoadedFlow(compiled=compiled, input=inputs, asserts=asserts, version=version)
+    return LoadedFlow(
+        compiled=compiled, input=inputs, asserts=asserts,
+        version=version, name=name, description=description,
+    )
