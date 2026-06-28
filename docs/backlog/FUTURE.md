@@ -22,8 +22,7 @@ This directory (`docs/backlog/`) is tracked in git and published in the doc site
 - **Cyclic-graph validation + engine re-enqueue** — prerequisite for the WATCH watch-loop.
 - **Structured AGENT output** — the larger build of a typed-output contract on the AGENT node. The
   near-term, focused version — *wiring the declared `output:` shape into generation* (structured-output
-  / tool-forcing / parse-retry) — is the "Structured AGENT output" item in [DEFER](DEFER.md), pending a
-  design pass.
+  / tool-forcing / parse-retry) — is **decided and tracked in [TODO](TODO.md)**.
 
 ## Engine — durability & scale (the server story)
 
@@ -36,28 +35,6 @@ This directory (`docs/backlog/`) is tracked in git and published in the doc site
   typed-error hierarchies** (a `<Node>Error` base + per-kind subclasses; the strategy dispatches on
   failure *type*, not a boundary string). Add an `exc.py` only to multi-failure-mode nodes
   (agent/code/ref/model).
-
-## Agent self-improvement — feedback + credit assignment
-
-A feedback loop that lets agents improve themselves. The shape: the **system receives feedback** on a
-run's output → **analyzes** it → **assigns blame** to which node/input actually caused the problem →
-**routes a targeted feedback signal back to the agent that produced that input**, which then improves
-(updates its prompt / memory / reflection). Think "backprop / textual-gradient for a graph of agents"
-(TextGrad / DSPy-optimizer family), adapted to our model.
-
-**Why this architecture fits it well (the differentiator):** because the call graph is
-**author-fixed, typed, and a DAG**, blame can be traced *along the fixed edges* — each node's inputs
-are explicit `from:` bindings, so "this bad output traces to that upstream node's output" is
-mechanically derivable, unlike an agentic system where the structure is itself runtime-decided. The
-typed boundaries + `asserts:` are natural feedback *signals* (a failed assert / a downstream rejection
-is a located error pointing at a producer).
-
-**Open / needs design (a whole subsystem):** the feedback ingestion surface (human thumbs / a critic
-agent / a failed assert); the credit-assignment algorithm (propagate a textual "gradient" backward
-across the DAG); the per-agent update channel (prompt edit? a reflection note into long-term
-**memory** — ties to the agent-memory axis in [DEFER](DEFER.md)?; offline vs online); and where state
-lives (per-agent learned context = the long-term memory/store seam). Relates to: agent memory (DEFER),
-structured AGENT output (DEFER), the assert/contract layer.
 
 ## Integration / providers / serving
 
