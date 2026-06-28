@@ -38,3 +38,15 @@ def test_boundary_assert_sets_assert_locator():
     assert result.locator.node is None
     assert result.locator.key == "${input.window} > 0"
 
+
+def test_code_wrong_type_output_sets_field_locator():
+    # A CODE node whose returned value fails its declared `output:` Shape is rejected at the
+    # typed write boundary. The failure surfaces as a node-less RunFailed; its locator points
+    # at the node's `output:` field so the CLI boxes the declaration, not a plain message.
+    text = (_ERRORS / "e21-code-wrong-type.yaml").read_text()
+    result = run_flow(load_flow(text), {"topic": "X"})
+    assert result.status == "failed"
+    assert result.locator is not None and result.locator.kind == "field"
+    assert result.locator.node == "calc"
+    assert result.locator.key == "output"
+

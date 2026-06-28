@@ -97,13 +97,25 @@ class _Aborted(Exception):
 
 
 class NodeExecutionError(RuntimeError):
-    """A node emitted NodeFailed and no error strategy recovered it (abort)."""
+    """A node emitted NodeFailed and no error strategy recovered it (abort).
 
-    def __init__(self, node_id: str, error: str, error_type: str = "") -> None:
+    `locator` is an optional `SourceSpan` pinning the failure to a YAML line — set at
+    the typed write boundary (a value that fails its node's declared `output:` Shape)
+    so the CLI boxes the `output:` field rather than printing a plain message.
+    """
+
+    def __init__(
+        self,
+        node_id: str,
+        error: str,
+        error_type: str = "",
+        locator: Optional[SourceSpan] = None,
+    ) -> None:
         super().__init__(f"node {node_id!r} failed: {error}")
         self.node_id = node_id
         self.error = error
         self.error_type = error_type
+        self.locator = locator
 
 
 class FlowEngine:
@@ -208,7 +220,7 @@ class FlowEngine:
                 yield RunAborted()
                 return
             except NodeExecutionError as exc:
-                yield RunFailed(error=exc.error, error_type=exc.error_type)
+                yield RunFailed(error=exc.error, error_type=exc.error_type, locator=exc.locator)
                 return
 
             if self.paused:
@@ -234,7 +246,7 @@ class FlowEngine:
         except _Aborted:
             terminal = RunAborted()
         except NodeExecutionError as exc:
-            terminal = RunFailed(error=exc.error, error_type=exc.error_type)
+            terminal = RunFailed(error=exc.error, error_type=exc.error_type, locator=exc.locator)
         finally:
             self._stop.set()
             for w in workers:
@@ -448,7 +460,10 @@ class FlowEngine:
                 self.pool.set(command.node_id, command.value, declared=node.output_shape)
             except SegmentError as exc:
                 self.sm.finish_executing(command.node_id)
-                raise NodeExecutionError(command.node_id, str(exc), type(exc).__name__)
+                raise NodeExecutionError(
+                    command.node_id, str(exc), type(exc).__name__,
+                    locator=SourceSpan(node=command.node_id, kind="field", key="output"),
+                )
             self.sm.finish_executing(command.node_id)  # idempotent (already finished on pause)
             for nid in self._advance(command.node_id):
                 self._schedule(nid)
@@ -916,7 +931,10 @@ class FlowEngine:
                 self.pool.set(spawner_id, event.output, declared=spawner.output_shape)
             except SegmentError as exc:
                 self.sm.finish_executing(node_id)
-                raise NodeExecutionError(node_id, str(exc), type(exc).__name__)
+                raise NodeExecutionError(
+                    node_id, str(exc), type(exc).__name__,
+                    locator=SourceSpan(node=spawner_id, kind="field", key="output"),
+                )
             self.sm.finish_executing(node_id)
             for nid in self._advance(spawner_id):
                 self._schedule(nid)
@@ -930,7 +948,10 @@ class FlowEngine:
                 self.pool.set(node_id, event.output, declared=node.output_shape)
             except SegmentError as exc:
                 self.sm.finish_executing(node_id)
-                raise NodeExecutionError(node_id, str(exc), type(exc).__name__)
+                raise NodeExecutionError(
+                    node_id, str(exc), type(exc).__name__,
+                    locator=SourceSpan(node=node_id, kind="field", key="output"),
+                )
         self.sm.finish_executing(node_id)
 
         if node.kind == NodeKind.IF_ELSE:

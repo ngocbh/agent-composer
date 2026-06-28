@@ -191,6 +191,21 @@ def test_run_error_boxes_boundary_assert_line(monkeypatch):
     assert "assert failed" in out
 
 
+def test_run_error_boxes_code_wrong_type_output(monkeypatch):
+    # e21's code node returns a value that fails its declared `output: int` -> the typed write
+    # boundary rejects it. The node-less RunFailed carries a `field` locator -> BOXED at the
+    # node's `output:` declaration (not a plain message, not the node header).
+    flow = _ERRORS / "e21-code-wrong-type.yaml"
+    text = flow.read_text()
+    result = run_flow(load_flow(text, search_paths=[flow.parent]), {"topic": "X"})
+    assert result.status == "failed"
+    buf = _sink(monkeypatch)
+    _render_run_error(result, flow, text)
+    out = buf.getvalue()
+    assert "e21-code-wrong-type.yaml:12" in out   # the `output: int` field line
+    assert "╭" in out
+
+
 def test_run_error_boxes_input_decl_line(monkeypatch):
     # e08's `window` can't coerce to int -> input-coercion failure carries an input_decl
     # locator -> boxed at the `window:` declaration line.
