@@ -14,6 +14,7 @@ Copy, rename, and edit.
 | Template | Shape it shows |
 |----------|----------------|
 | [`minimal.yaml`](templates/minimal.yaml) | one AGENT, `str` in/out |
+| [`compact.yaml`](templates/compact.yaml) | the SAME one-agent flow in compact form (no `nodes:` map) |
 | [`pipeline.yaml`](templates/pipeline.yaml) | AGENT → CODE (typed record) — deterministic post-processing |
 | [`typed_output.yaml`](templates/typed_output.yaml) | AGENT with a record `output:` — structured generation + `retries:` |
 | [`branching.yaml`](templates/branching.yaml) | classify → `case` route → `\|` join |

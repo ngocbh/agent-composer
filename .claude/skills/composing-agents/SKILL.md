@@ -66,6 +66,27 @@ asserts:                     # optional — boolean invariants
 There is **no `edges:` block**, no `__start__`/`__end__`, no per-node `id:`, and
 no body wrappers — a node body is flat.
 
+### Compact mode — when the flow is a single node
+
+For the "one flow, one node" case, drop the `nodes:` map and the redundant
+`output: ${node.output}` line — put the node `kind:` and its fields at the top
+level. The flow `id:` names the node; the flow `input:` is the node signature
+(auto-wired by name); the flow `output:` is the node's output type, re-exported.
+
+```yaml
+id: hello
+name: hello
+input:
+  name: str                  # auto-wired into the node as ${input.name}
+output: str                  # the node's output TYPE — also the flow output
+kind: agent
+prompt: "Write a warm one-sentence greeting to ${name}."
+```
+
+Allowed only for the **leaf kinds** (`agent`, `code`, `model`, `tool`,
+`human_input`) — `case`/`call`/`map` need the full `nodes:` form. See
+[`templates/compact.yaml`](templates/compact.yaml).
+
 ## References — how you wire values
 
 | Write | Means |

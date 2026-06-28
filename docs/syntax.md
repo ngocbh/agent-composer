@@ -24,6 +24,56 @@ asserts: [ ... ]           # optional — boolean invariants
 There is **no `edges:` block**, no `__start__`/`__end__`, no per-node `id:`, and
 no body wrappers — a node body is flat.
 
+### Compact mode — when the flow *is* one node
+
+The common case is "one flow, one node." Writing a full `nodes:` map plus a
+redundant `output: ${greet.output}` wiring step for it is noise, so a flow whose
+body is a single node can be written **inline**: drop the `nodes:` map and put the
+node's `kind:` and its fields at the top level.
+
+```yaml
+# hello.yaml — the compact form
+id: hello                  # names BOTH the flow and its single node
+name: hello
+input:
+  name: str                # the node signature — auto-wired by name
+output: str                # the node's output TYPE — re-exported as the flow output
+kind: agent
+prompt: |-
+  Write a short, warm one-sentence greeting addressed to ${name}.
+```
+
+This desugars to the canonical one-node flow below before compile — same IR, same
+behavior:
+
+```yaml
+id: hello
+name: hello
+input:
+  name: str
+nodes:
+  hello:                   # keyed by the flow id
+    kind: agent
+    input:
+      name: ${input.name}  # each flow input auto-wired by name
+    output: str
+    prompt: |-
+      Write a short, warm one-sentence greeting addressed to ${name}.
+output: ${hello.output}    # the single node's output, re-exported
+```
+
+Rules:
+
+- The flow `input:` is the node's signature — each parameter is auto-wired into the
+  node by name (`name` → `${input.name}`), so you refer to it bare in the prompt.
+- The flow `output:` is the node's output **type**; the flow returns that node's
+  output (no explicit `output: ${...}` line).
+- Any other field (`prompt:`, `tools:`, `llm_config:`, node-local `asserts:`, …)
+  is the node body.
+- Allowed only for the **value-producing leaf kinds** — `agent`, `code`, `model`,
+  `tool`, `human_input`. `case`/`call`/`map` reference other nodes a one-node flow
+  has none of, so they need the full `nodes:` form.
+
 ## References — naming a value
 
 Everywhere you wire data you use a `${...}` reference:

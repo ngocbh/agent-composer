@@ -123,6 +123,77 @@ class ComposeFile(BaseModel):
         return _phase3_back_map_to_plural(normalized)
 
 
+# Compact (single-node) flow: the flow's top-level body carries a node `kind:` and
+# NO `nodes:` map — the flow *is* one node. These flow-metadata keys stay at the flow
+# level on desugar; every other key (the node `kind:` + its logic fields) becomes the
+# single node's body. `input:`/`output:` get special treatment (see `_desugar_compact`).
+_COMPACT_FLOW_KEYS = frozenset({"id", "name", "description", "version", "typedefs"})
+
+# Compact form is restricted to value-producing LEAF kinds. case/call/map reference
+# other nodes or callables that a one-node flow has none of, so they make no sense
+# inline — an author who needs them writes a full `nodes:` map.
+_COMPACT_KINDS = frozenset({"agent", "code", "model", "tool", "human_input"})
+
+
+def _desugar_compact(body: dict, lines: dict[str, int]) -> dict:
+    """Desugar a compact single-node flow into the canonical one-node form.
+
+    A compact flow carries a node `kind:` at the top level and NO `nodes:` map — the
+    flow *is* the node. Mirrors `loader._load_single_node_def` (the `defs:` precedent):
+
+    - the flow `id:` names the single node (one id for both flow and node, so errors
+      reference a meaningful name);
+    - the flow `input:` is the node's SIGNATURE (`name: TYPE`), auto-wired into the node
+      by name (`p = ${input.p}`);
+    - the flow `output:` is the node's output TYPE (the codomain), re-exported as the
+      flow output (`output: ${<id>.output}`), so the author skips the redundant wiring;
+    - everything else (the `kind:` + its logic fields, e.g. `prompt:`/`asserts:`/
+      `llm_config:`) is the node body.
+
+    The returned dict is the canonical compose body (with a `nodes:` map) the strict
+    `ComposeFile` schema then validates unchanged. Raises `LoadError` on a non-leaf
+    kind or a missing flow `id:`.
+    """
+    kind = body["kind"]
+    if kind not in _COMPACT_KINDS:
+        raise LoadError(
+            f"compact (single-node) flow: kind {kind!r} is not allowed inline "
+            f"(allowed: {', '.join(sorted(_COMPACT_KINDS))}); case/call/map reference "
+            f"other nodes a one-node flow has none of — write a full `nodes:` map instead",
+            line=lines.get("kind"),
+        )
+    flow_id = body.get("id")
+    if not isinstance(flow_id, str) or not flow_id:
+        raise LoadError(
+            "compact (single-node) flow: a top-level `id:` is required — it names the "
+            "single node",
+            line=lines.get("id"),
+        )
+    params = body.get("input") or {}
+    if not isinstance(params, dict):
+        raise LoadError(
+            "compact (single-node) flow: `input:` must be a param map (name: TYPE)",
+            line=lines.get("input"),
+        )
+
+    # The node body = the kind + its logic fields (everything that is not flow metadata
+    # or the special input:/output: keys). Auto-wire the flow inputs by name; carry the
+    # flow `output:` through as the node's output TYPE.
+    node_body = {
+        k: v for k, v in body.items()
+        if k not in _COMPACT_FLOW_KEYS and k not in ("input", "output")
+    }
+    node_body["input"] = {p: f"${{input.{p}}}" for p in params}
+    if "output" in body:
+        node_body["output"] = body["output"]
+
+    canonical = {k: body[k] for k in _COMPACT_FLOW_KEYS if k in body}
+    canonical["input"] = params
+    canonical["nodes"] = {flow_id: node_body}
+    canonical["output"] = f"${{{flow_id}.output}}"  # re-export the single node's output
+    return canonical
+
+
 def _top_level_lines(text: str) -> dict[str, int]:
     """Best-effort map of top-level key -> 1-based source line (for loud errors).
 
@@ -167,6 +238,12 @@ def parse_file(text: str) -> ComposeFile:
 
     lines = _top_level_lines(text)
     body = {k: v for k, v in raw.items() if not str(k).startswith("x-")}
+
+    # Compact (single-node) flow: a top-level node `kind:` with no `nodes:` map. Desugar
+    # to the canonical one-node form BEFORE the strict-schema checks below, since `nodes:`
+    # is required and `extra="forbid"` would otherwise reject the inline node fields.
+    if "kind" in body and "nodes" not in body:
+        body = _desugar_compact(body, lines)
 
     # ComposeFile's model_validator(mode='before') normalizes section
     # keywords (input:↔inputs:, output:↔outputs:) at top + nested + defs bodies.

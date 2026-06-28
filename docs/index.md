@@ -15,25 +15,21 @@ two of you together. You can see exactly what runs, inspect it for bugs, and ref
 after an error; so can the model. The human owns the graph; the LLMs only fill the leaf
 boxes — they never rewrite the structure at runtime.
 
-A flow is a function: it has a typed `input:`, a graph of `nodes:`, and an `output:`.
-The graph between nodes is *inferred* from the `${...}` references — you never draw
+A flow is a function: a typed `input:`, a body, and an `output:`. The smallest flow
+is a single node, written inline (below). As a flow grows into a graph of `nodes:`,
+the edges between them are *inferred* from the `${...}` references — you never draw
 edges by hand.
 
 ```yaml
-# hello.yaml
+# hello.yaml — compact form: the flow IS one node (no nodes: map, no output wiring)
 id: hello
 name: hello
 input:
   name: str
-nodes:
-  greet:
-    kind: agent
-    input:
-      name: ${input.name}
-    output: str
-    prompt: |-
-      Write a short, warm one-sentence greeting addressed to ${name}.
-output: ${greet.output}
+output: str
+kind: agent
+prompt: |-
+  Write a short, warm one-sentence greeting addressed to ${name}.
 ```
 
 ```console

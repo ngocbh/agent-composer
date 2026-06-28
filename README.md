@@ -20,25 +20,60 @@ The graph between nodes is *inferred* from the `${...}` references — you never
 edges by hand.
 
 ```yaml
-# hello.yaml
-id: hello
-name: hello
+# debate.yaml — frame a question, argue both sides in parallel, then decide
+id: debate
+name: debate
 input:
-  name: str
+  question: str
 nodes:
-  greet:
+  frame:
     kind: agent
     input:
-      name: ${input.name}
+      question: ${input.question}
+    output: str
+    prompt: "Restate '${question}' and list the 2-3 criteria that should drive it."
+  for_case:
+    kind: agent
+    input:
+      brief: ${frame.output}            # edge: frame -> for_case
+    output: str
+    prompt: "Make the strongest case FOR, against these criteria: ${brief}"
+  against_case:
+    kind: agent
+    input:
+      brief: ${frame.output}            # frame -> against_case (runs parallel to for_case)
+    output: str
+    prompt: "Make the strongest case AGAINST, against these criteria: ${brief}"
+  verdict:
+    kind: agent
+    input:
+      for_case: ${for_case.output}      # fan-in: verdict waits for BOTH sides
+      against_case: ${against_case.output}
     output: str
     prompt: |-
-      Write a short, warm one-sentence greeting addressed to ${name}.
-output: ${greet.output}
+      Weigh both sides and recommend in 2-3 sentences, with the key reason.
+      For: ${for_case}
+      Against: ${against_case}
+output: ${verdict.output}
 ```
 
+The four nodes form a **diamond**, inferred entirely from the `${...}` references —
+no edges are drawn by hand:
+
+```
+        ┌─> for_case ────┐
+frame ──┤                ├──> verdict
+        └─> against_case ┘
+```
+
+`for_case` and `against_case` both read `${frame.output}` but never reference each
+other, so the engine runs them **in parallel**; `verdict` reads both, so it **waits
+for both** before it runs. The structure is fixed by the author: every run argues
+both sides before deciding — you can read that guarantee straight off the file.
+
 ```console
-$ ac run hello.yaml --input name=Ada
-Hello, Ada — it's wonderful to have you here!
+$ ac run debate.yaml --input question="Should a small team adopt a monorepo?"
+Adopt the monorepo. For a small team the simpler cross-project refactors and single ...
 ```
 
 ## Install
@@ -113,7 +148,8 @@ ac run examples/hello.yaml --input name=Ada
 
 The [`examples/`](examples/) directory ships a few generic flows:
 
-- `hello.yaml` — the smallest agent flow (one AGENT, string in/out).
+- `hello.yaml` — the smallest agent flow (one AGENT, string in/out), in compact form.
+- `debate.yaml` — frame → argue for/against in parallel → verdict (a fan-out/fan-in diamond).
 - `summarize.yaml` — condense a block of text into one sentence.
 - `classify.yaml` — label text with a constrained `Literal[...]` output.
 - `triage-ticket.yaml` — extract a structured record from a support message, then draft a reply.
