@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 from agent_composer.compile.llm_cascade import resolve_llm_cascade
-from agent_composer.events import RunAborted, RunFailed, RunPaused, RunSucceeded
+from agent_composer.events import RunAborted, RunFailed, RunPaused, RunSucceeded, SourceSpan
 from agent_composer.expr import first_failing_assert
 from agent_composer.runtime.engine import FlowEngine
 from agent_composer.state.pool import TypedVariablePool
@@ -77,6 +77,12 @@ class RunResult:
         error (`str`, *optional*, defaults to `None`):
             Human-readable failure detail. Set only when `status == "failed"`
             (including a false post-terminal assert).
+        locator (`SourceSpan`, *optional*, defaults to `None`):
+            The precise YAML sub-location a flow-level failure originates from — a false
+            post-terminal/boundary assert expr, or a boundary input-coercion error. Set only
+            when `status == "failed"` AND no `NodeFailed` carries the location (a node-level
+            failure puts its locator on the `NodeFailed` event instead). The CLI resolves it
+            to a 1-based source line.
         events (`list[Any]`):
             The raw engine event objects, in emission order. A host serializes them
             however it sees fit.
@@ -95,6 +101,7 @@ class RunResult:
     status: str
     output: Any = None
     error: Optional[str] = None
+    locator: Optional[SourceSpan] = None
     events: List[Any] = field(default_factory=list)
     checkpoint: Optional[Any] = None
     engine: Optional[Any] = None
@@ -183,6 +190,7 @@ def run_flow(
     status = "incomplete"
     output: Any = None
     error: Optional[str] = None
+    result_locator: Optional[SourceSpan] = None  # flow-level location (no NodeFailed behind it)
 
     for event in engine.run():
         if on_event is not None:
@@ -195,6 +203,7 @@ def run_flow(
                 output = event.output
             elif isinstance(event, RunFailed):
                 error = event.error
+                result_locator = event.locator  # boundary assert / input-coercion (Step 8)
 
     # A paused run carries the resume handles: the live engine (fast in-process),
     # a serializable checkpoint (durable), and the pause reasons.
@@ -217,9 +226,11 @@ def run_flow(
         if bad is not None:
             status = "failed"
             error = f"assert failed: {bad}"
+            result_locator = SourceSpan(node=None, kind="assert", key=bad)
 
     return RunResult(
-        input=coerced, status=status, output=output, error=error, events=events
+        input=coerced, status=status, output=output, error=error,
+        locator=result_locator, events=events,
     )
 
 
@@ -284,6 +295,7 @@ def resume_flow(
 
     events: List[Any] = []
     status, output, error = "incomplete", None, None
+    result_locator: Optional[SourceSpan] = None  # flow-level location (no NodeFailed behind it)
     for event in engine.resume(commands or []):
         if on_event is not None:
             on_event(event)
@@ -295,6 +307,7 @@ def resume_flow(
                 output = event.output
             elif isinstance(event, RunFailed):
                 error = event.error
+                result_locator = event.locator
 
     if status == "paused":
         paused = [e for e in events if isinstance(e, RunPaused)]
@@ -311,9 +324,11 @@ def resume_flow(
         bad = first_failing_assert(loaded.asserts.post, engine.pool)
         if bad is not None:
             status, error = "failed", f"assert failed: {bad}"
+            result_locator = SourceSpan(node=None, kind="assert", key=bad)
 
     return RunResult(
-        input={}, status=status, output=output, error=error, events=events
+        input={}, status=status, output=output, error=error,
+        locator=result_locator, events=events,
     )
 
 
