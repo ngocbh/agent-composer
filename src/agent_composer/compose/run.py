@@ -29,6 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
+from agent_composer.compile.llm_cascade import resolve_llm_cascade
 from agent_composer.events import RunAborted, RunFailed, RunPaused, RunSucceeded
 from agent_composer.expr import first_failing_assert
 from agent_composer.runtime.engine import FlowEngine
@@ -106,6 +107,7 @@ def run_flow(
     *,
     run_id: Optional[str] = None,
     on_event: Optional[EventHook] = None,
+    llm_config: Optional[Dict[str, Any]] = None,
 ) -> RunResult:
     """
     Coerce inputs, seed the variable pool, enforce asserts, and drive the flow to a terminal.
@@ -131,6 +133,9 @@ def run_flow(
         on_event (`Callable[[Any], None]`, *optional*, defaults to `None`):
             Called with each engine event as it occurs (`NodeStarted`, `RunSucceeded`,
             `RunPaused`, `RunFailed`, `RunAborted`). Use it for progress reporting.
+        llm_config (`dict[str, Any]`, *optional*, defaults to `None`):
+            Outermost cascade layer (CLI `--provider`/`--model`); fills only the gaps a
+            flow leaves unset, then `model_from_config` applies env/global defaults.
 
     Returns:
         `RunResult`:
@@ -150,6 +155,10 @@ def run_flow(
     coerced = apply_defaults(
         loaded.input, coerce_inputs(loaded.input, inputs)
     )
+
+    # Resolve the per-agent effective llm_config before the engine reads the graph: the CLI
+    # layer (llm_config) is the outermost gap-fill layer of the cascade. See resolve_llm_cascade.
+    resolve_llm_cascade(loaded.compiled, llm_config or {})
 
     pool = TypedVariablePool()
     seed_system_clock(pool)  # ${system.today}/${system.now} — once per run
