@@ -1,8 +1,8 @@
 """_answer_schema derives a light, lossless IOField-shaped schema from an output Shape."""
 
-from agent_compose.compose.build import _answer_schema
-from agent_compose.compose.shapes import read_shape
-from agent_compose.state.types import read_typedefs
+from agent_composer.compose.build import _answer_schema
+from agent_composer.compose.shapes import read_shape
+from agent_composer.state.types import read_typedefs
 
 _REG = read_typedefs({})
 

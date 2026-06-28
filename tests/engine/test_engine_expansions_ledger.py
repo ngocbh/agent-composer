@@ -9,11 +9,11 @@ Fixtures here are reused by the snapshot/restore and durable-resume tests — ke
 
 from typing import Any
 
-from agent_compose.compile.model import END_ID, START_ID, FlowOutput
-from agent_compose.nodes.call.node import CallNode
-from agent_compose.nodes.human_input import HumanInputNode
-from agent_compose.nodes.map.node import MapNode
-from agent_compose.runtime.engine import FlowEngine
+from agent_composer.compile.model import END_ID, START_ID, FlowOutput
+from agent_composer.nodes.call.node import CallNode
+from agent_composer.nodes.human_input import HumanInputNode
+from agent_composer.nodes.map.node import MapNode
+from agent_composer.runtime.engine import FlowEngine
 from tests.engine._fakes import FuncNode, stamp_reads
 from tests.engine._graph_builder import _graph
 
@@ -101,7 +101,7 @@ def test_ledger_empty_for_static_flow():
 def test_ledger_records_call_expansion():
     """A CALL spawner adds ONE CallExpansion to the top-level ledger; the cloned
     child's pause leaves `bridge` EXPANDED but the ledger entry is independent."""
-    from agent_compose.suspension.expansions import CallExpansion
+    from agent_composer.suspension.expansions import CallExpansion
     g = call_with_inner_pause()
     engine = FlowEngine(g, run_inputs={"payload": "go"})
     list(engine.run())  # parks at the inner ask
@@ -113,7 +113,7 @@ def test_ledger_records_call_expansion():
 
 def test_ledger_records_map_expansion_with_records():
     """A MAP spawner adds ONE MapExpansion with one record per element."""
-    from agent_compose.suspension.expansions import MapExpansion
+    from agent_composer.suspension.expansions import MapExpansion
     g = map_with_inner_pause()
     engine = FlowEngine(g, run_inputs={"items": ["a", "b"]})
     list(engine.run())  # parks at both element leaves
@@ -129,9 +129,9 @@ def test_ledger_records_map_expansion_with_records():
 def test_ledger_records_agent_expansion_per_pause(monkeypatch):
     """A multi-pause AGENT creates ONE AgentExpansion whose segments list grows per pause."""
     from langchain_core.messages import AIMessage
-    import agent_compose.llm_clients as llm
-    from agent_compose import load_flow
-    from agent_compose.suspension.expansions import AgentExpansion
+    import agent_composer.llm_clients as llm
+    from agent_composer import load_flow
+    from agent_composer.suspension.expansions import AgentExpansion
     from tests.engine.test_agent_continuation import _chat, _ask, ASK
     chat = _chat([
         _ask({"question": "q1?"}, "q1"),
@@ -140,7 +140,7 @@ def test_ledger_records_agent_expansion_per_pause(monkeypatch):
     ])
     monkeypatch.setattr(llm, "model_from_config", lambda cfg: chat)
     loaded = load_flow(ASK)
-    from agent_compose.compose.run import run_flow, resume_command
+    from agent_composer.compose.run import run_flow, resume_command
     rec = run_flow(loaded, {})  # parks at pause 1
     agents = [e for e in rec.engine.expansions if isinstance(e, AgentExpansion)]
     assert len(agents) == 1
@@ -173,7 +173,7 @@ def test_nested_call_inside_map_is_descriptor_child():
         [(START_ID, "each"), ("each", END_ID)],
         outputs=[FlowOutput(name="r", from_="${each.output}")],
     )
-    from agent_compose.suspension.expansions import CallExpansion, MapExpansion
+    from agent_composer.suspension.expansions import CallExpansion, MapExpansion
     engine = FlowEngine(parent, run_inputs={"items": ["a"]})
     list(engine.run())  # parks deep inside element 0
     # Top-level: exactly ONE MapExpansion. No top-level CallExpansion.

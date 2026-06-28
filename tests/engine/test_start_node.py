@@ -1,13 +1,13 @@
 import pytest
 
-from agent_compose.compile.model import START_ID
-from agent_compose.compose.shapes import InputDecl
-from agent_compose.nodes.base import NodeKind, Output
-from agent_compose.nodes.binding import ParamDecl
-from agent_compose.nodes.start import StartNode
-from agent_compose.runtime.eval_node import eval_node
-from agent_compose.state.pool import TypedVariablePool
-from agent_compose.state.segments import SegmentType, Shape
+from agent_composer.compile.model import START_ID
+from agent_composer.compose.shapes import InputDecl
+from agent_composer.nodes.base import NodeKind, Output
+from agent_composer.nodes.binding import ParamDecl
+from agent_composer.nodes.start import StartNode
+from agent_composer.runtime.eval_node import eval_node
+from agent_composer.state.pool import TypedVariablePool
+from agent_composer.state.segments import SegmentType, Shape
 
 
 def _decl(name, type_, default=None, required=False, shape=None):
@@ -51,7 +51,7 @@ def test_start_through_eval_node_binds_from_wiring():
     # run coerces, NodeSucceeded carries the bound record. (No direct .run — the real engine path.)
     from types import SimpleNamespace
 
-    from agent_compose.events import NodeSucceeded
+    from agent_composer.events import NodeSucceeded
     node = StartNode("__start__", input_decls=[_decl("topic", "str")])
     pool = TypedVariablePool()
     pool.set(START_ID, {"topic": "ACME"})  # the seed-stand-in source the wiring points at
@@ -68,7 +68,7 @@ def test_start_through_eval_node_fills_omitted_default():
     # (Pre-fix the bare params bound it as present-None, so apply_defaults could not fill it.)
     from types import SimpleNamespace
 
-    from agent_compose.events import NodeSucceeded
+    from agent_composer.events import NodeSucceeded
     node = StartNode("__start__", input_decls=[
         _decl("topic", "str"),
         _decl("window", "int", default="30", shape=Shape.scalar(SegmentType.INTEGER)),
@@ -87,7 +87,7 @@ def test_start_through_eval_node_required_unbound_fails():
     # fails loudly (a runtime backstop to the load-time _check_ref_bindings gate).
     from types import SimpleNamespace
 
-    from agent_compose.events import NodeFailed
+    from agent_composer.events import NodeFailed
     node = StartNode("__start__", input_decls=[
         _decl("n", "int", required=True, shape=Shape.scalar(SegmentType.INTEGER)),
     ])

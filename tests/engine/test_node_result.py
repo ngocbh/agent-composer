@@ -4,7 +4,7 @@ Three variants only. The FAILED path is `raise` -> engine boundary `NodeFailed` 
 variant). `Enqueue` is defined here but produced/interpreted by the composition drivers.
 """
 
-from agent_compose.nodes.base import Enqueue, Output, Pause
+from agent_composer.nodes.base import Enqueue, Output, Pause
 
 
 def test_output_carries_value_and_handle():

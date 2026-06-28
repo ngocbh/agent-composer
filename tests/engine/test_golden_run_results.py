@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from agent_compose.compose import (
+from agent_composer.compose import (
     LoadError,
     load_flow,
     resume_command,

@@ -9,9 +9,9 @@ Feature -> contract:
 
 import pytest
 
-from agent_compose.compile.model import START_ID
-from agent_compose.state.pool import TypedVariablePool
-from agent_compose.state.segments import SegmentError, SegmentType
+from agent_composer.compile.model import START_ID
+from agent_composer.state.pool import TypedVariablePool
+from agent_composer.state.segments import SegmentError, SegmentType
 
 
 def test_set_and_get():
@@ -87,7 +87,7 @@ def test_declared_type_drift_raises():
 
 
 def test_pool_set_accepts_shape_and_enforces():
-    from agent_compose.state.segments import Shape
+    from agent_composer.state.segments import Shape
 
     pool = TypedVariablePool()
     action = Shape(seg_type=SegmentType.STRING, tags=frozenset({"Approve", "Reject"}))

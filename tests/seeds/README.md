@@ -3,7 +3,7 @@
 These are **example flows in the `Agent Compose` contract** (the Compose-inspired,
 edge-free, single-value I/O model from
 `docs/plans/2026-06-10-engine-json-io-redesign-design.md` → §0c). They load and
-run via the Compose loader (`agent_compose.load_flow` / `run_flow`); the CODE
+run via the Compose loader (`agent_composer.load_flow` / `run_flow`); the CODE
 nodes call `tests.seeds.fns`.
 
 > Flows that need not-yet-supported features (REF/MAP runtime · M8, `${system.run_id}`,

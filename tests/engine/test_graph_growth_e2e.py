@@ -29,13 +29,13 @@ from pathlib import Path
 
 import pytest
 
-from agent_compose.compile.model import START_ID
-from agent_compose.compose import LoadError, load_flow, resume_command, resume_flow, run_flow
-from agent_compose.nodes.base import NodeKind
-from agent_compose.runtime.engine import FlowEngine
-from agent_compose.state.pool import TypedVariablePool
-from agent_compose.suspension.checkpoint import CHECKPOINT_VERSION, RunCheckpoint
-from agent_compose.events import RunSucceeded
+from agent_composer.compile.model import START_ID
+from agent_composer.compose import LoadError, load_flow, resume_command, resume_flow, run_flow
+from agent_composer.nodes.base import NodeKind
+from agent_composer.runtime.engine import FlowEngine
+from agent_composer.state.pool import TypedVariablePool
+from agent_composer.suspension.checkpoint import CHECKPOINT_VERSION, RunCheckpoint
+from agent_composer.events import RunSucceeded
 
 _SEEDS = Path(__file__).resolve().parents[2] / "tests" / "seeds"
 
@@ -117,9 +117,9 @@ def test_scratch_is_eliminated_structurally():
     assert not hasattr(pool, "scratch")
     assert not hasattr(pool, "scratch_set") and not hasattr(pool, "scratch_get")
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("agent_compose.nodes.scratch_cap")
+        importlib.import_module("agent_composer.nodes.scratch_cap")
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("agent_compose.nodes.agent.scratch")
+        importlib.import_module("agent_composer.nodes.agent.scratch")
 
 
 def test_no_node_attr_or_method_reads_scratch():

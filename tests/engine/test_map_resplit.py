@@ -10,7 +10,7 @@ import importlib
 
 import pytest
 
-from agent_compose.nodes.base import NodeKind
+from agent_composer.nodes.base import NodeKind
 
 
 def test_ref_kind_gone_call_and_map_are_the_two_drivers():
@@ -22,14 +22,14 @@ def test_ref_kind_gone_call_and_map_are_the_two_drivers():
 
 def test_ref_package_gone_call_and_map_packages_exist():
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("agent_compose.nodes.ref")
-    importlib.import_module("agent_compose.nodes.call")
-    importlib.import_module("agent_compose.nodes.map")
+        importlib.import_module("agent_composer.nodes.ref")
+    importlib.import_module("agent_composer.nodes.call")
+    importlib.import_module("agent_composer.nodes.map")
 
 
 def test_call_node_is_ref_only_map_node_is_distinct():
-    from agent_compose.nodes.call import CallNode
-    from agent_compose.nodes.map import MapNode
+    from agent_composer.nodes.call import CallNode
+    from agent_composer.nodes.map import MapNode
     ref = CallNode("c", flow_id="child", child=object())
     assert ref.kind is NodeKind.CALL
     assert not hasattr(ref, "over") and not hasattr(ref, "parallel")  # REF carries neither

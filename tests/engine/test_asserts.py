@@ -16,9 +16,9 @@ from pathlib import Path
 
 import pytest
 
-from agent_compose.state.segments import SegmentType, Shape
-from agent_compose.compose.asserts import AssertSet, classify_asserts
-from agent_compose.compose.errors import LoadError
+from agent_composer.state.segments import SegmentType, Shape
+from agent_composer.compose.asserts import AssertSet, classify_asserts
+from agent_composer.compose.errors import LoadError
 
 _SEEDS = Path(__file__).resolve().parents[2] / "tests" / "seeds"
 

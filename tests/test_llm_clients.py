@@ -7,10 +7,10 @@ silently dropped for anthropic/google/azure), and the dual-region providers.
 
 import pytest
 
-from agent_compose.llm_clients import create_llm_client
-from agent_compose.llm_clients.anthropic_client import _supports_effort
-from agent_compose.llm_clients.api_key_env import get_api_key_env
-from agent_compose.llm_clients.capabilities import get_capabilities
+from agent_composer.llm_clients import create_llm_client
+from agent_composer.llm_clients.anthropic_client import _supports_effort
+from agent_composer.llm_clients.api_key_env import get_api_key_env
+from agent_composer.llm_clients.capabilities import get_capabilities
 
 
 # --- capability table ------------------------------------------------------- #
@@ -85,7 +85,7 @@ def test_azure_temperature_passthrough_and_endpoint_base_stripping(monkeypatch):
 
 @pytest.mark.parametrize("provider", ["qwen-cn", "glm-cn", "minimax", "minimax-cn"])
 def test_factory_resolves_new_dual_region_providers(provider):
-    from agent_compose.llm_clients.openai_client import OpenAIClient
+    from agent_composer.llm_clients.openai_client import OpenAIClient
 
     client = create_llm_client(provider, "some-model")
     assert isinstance(client, OpenAIClient)
@@ -102,7 +102,7 @@ def test_api_key_env_maps_dual_region_keys():
 
 
 def test_factory_resolves_vllm_as_openai_compatible():
-    from agent_compose.llm_clients.openai_client import OpenAIClient
+    from agent_composer.llm_clients.openai_client import OpenAIClient
 
     client = create_llm_client("vllm", "meta-llama/Llama-3.1-8B-Instruct")
     assert isinstance(client, OpenAIClient)
@@ -126,7 +126,7 @@ def test_vllm_uses_api_key_and_base_url_when_set(monkeypatch):
 
 
 def test_vllm_accepts_any_model_name():
-    from agent_compose.llm_clients.validators import validate_model
+    from agent_composer.llm_clients.validators import validate_model
 
     assert validate_model("vllm", "any/arbitrary-served-model") is True
 
@@ -135,7 +135,7 @@ def test_vllm_accepts_any_model_name():
 
 
 def test_factory_routes_ollama_to_native_client():
-    from agent_compose.llm_clients.ollama_client import OllamaClient
+    from agent_composer.llm_clients.ollama_client import OllamaClient
 
     client = create_llm_client("ollama", "qwen3.5:35b")
     assert isinstance(client, OllamaClient)

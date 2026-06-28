@@ -2,9 +2,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent_compose.nodes.base import Enqueue, NodeKind
-from agent_compose.nodes.call import CallNode
-from agent_compose.nodes.map import MapNode
+from agent_composer.nodes.base import Enqueue, NodeKind
+from agent_composer.nodes.call import CallNode
+from agent_composer.nodes.map import MapNode
 
 
 def _child():

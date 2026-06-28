@@ -6,9 +6,9 @@ contract and the runtime scheduling in isolation from LLMs/tools.
 
 from typing import Any, Callable
 
-from agent_compose.events import StreamChunk
-from agent_compose.nodes.base import Node, NodeKind, Output, Pause
-from agent_compose.nodes.binding import ParamDecl
+from agent_composer.events import StreamChunk
+from agent_composer.nodes.base import Node, NodeKind, Output, Pause
+from agent_composer.nodes.binding import ParamDecl
 
 
 def stamp_reads(node, reads):
@@ -31,8 +31,8 @@ def drive(node, pool=None, flow=None):
     """Drive a node through the engine's `eval_node` seam (binds purely from `params` +
     `flow.wiring`) and return its event generator. With no `flow`, derive a stub `flow.wiring`
     from the node's declared `_wiring_src`."""
-    from agent_compose.runtime.eval_node import eval_node
-    from agent_compose.state.pool import TypedVariablePool
+    from agent_composer.runtime.eval_node import eval_node
+    from agent_composer.state.pool import TypedVariablePool
     from types import SimpleNamespace
 
     if flow is None:

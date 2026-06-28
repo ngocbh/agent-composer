@@ -69,16 +69,16 @@ ac run FLOW.yaml [--input k=v]... [--inputs inputs.json] [--quiet]
 The default provider and model are read from the environment:
 
 ```console
-export AGENT_COMPOSE_DEFAULT_PROVIDER=anthropic        # or openai / google / ollama
-export AGENT_COMPOSE_DEFAULT_MODEL=claude-sonnet-4-5
+export AGENT_COMPOSER_DEFAULT_PROVIDER=anthropic        # or openai / google / ollama
+export AGENT_COMPOSER_DEFAULT_MODEL=claude-sonnet-4-5
 export ANTHROPIC_API_KEY=...                            # provider's own key var
 ```
 
 For a local Ollama endpoint:
 
 ```console
-export AGENT_COMPOSE_DEFAULT_PROVIDER=ollama
-export AGENT_COMPOSE_DEFAULT_MODEL=llama3.2:3b
+export AGENT_COMPOSER_DEFAULT_PROVIDER=ollama
+export AGENT_COMPOSER_DEFAULT_MODEL=llama3.2:3b
 export OLLAMA_BASE_URL=http://localhost:11434
 ac run examples/hello.yaml --input name=Ada
 ```
@@ -94,7 +94,7 @@ The [`examples/`](examples/) directory ships a few generic flows:
 ## Use it as a library
 
 ```python
-from agent_compose import load_flow, run_flow
+from agent_composer import load_flow, run_flow
 
 loaded = load_flow(open("hello.yaml").read(), search_paths=["."])
 result = run_flow(loaded, {"name": "Ada"})

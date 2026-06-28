@@ -2,18 +2,18 @@
 
 import pytest
 
-from agent_compose.expr.expressions import (
+from agent_composer.expr.expressions import (
     ExpressionError,
     evaluate_when,
     render_template,
     resolve_reference,
 )
-from agent_compose.compile.model import END_ID, START_ID, Edge, CompiledFlow
-from agent_compose.nodes.end import EndNode
-from agent_compose.nodes.if_else import Case, IfElseNode
-from agent_compose.nodes.start import StartNode
-from agent_compose.runtime.engine import FlowEngine
-from agent_compose.state.pool import TypedVariablePool
+from agent_composer.compile.model import END_ID, START_ID, Edge, CompiledFlow
+from agent_composer.nodes.end import EndNode
+from agent_composer.nodes.if_else import Case, IfElseNode
+from agent_composer.nodes.start import StartNode
+from agent_composer.runtime.engine import FlowEngine
+from agent_composer.state.pool import TypedVariablePool
 from tests.engine._fakes import FuncNode, RecordNode, derive_wiring, stamp_reads
 
 
@@ -99,7 +99,7 @@ def test_when_arithmetic_non_numeric_raises():
 
 def test_when_arithmetic_in_record_path():
     # the same grammar serves the strict-IF_ELSE record path
-    from agent_compose.expr.expressions import evaluate_when_record
+    from agent_composer.expr.expressions import evaluate_when_record
 
     assert evaluate_when_record("${a} * ${b} >= 10", {"a": 4, "b": 3}) is True
     assert evaluate_when_record("${a} % 2 == 1", {"a": 5}) is True
@@ -163,14 +163,14 @@ def test_when_missing_reference_still_falsy_after_render_change():
 
 
 def test_render_record_substitutes_declared_inputs():
-    from agent_compose.expr.template import render_template_record
+    from agent_composer.expr.template import render_template_record
 
     rec = {"topic": "ZETA", "rating": {"value": 0.8}}
     assert render_template_record("Assess ${topic} v=${rating.value}", rec) == "Assess ZETA v=0.8"
 
 
 def test_render_record_raises_on_unknown_or_none():
-    from agent_compose.expr.template import render_template_record
+    from agent_composer.expr.template import render_template_record
 
     with pytest.raises(ExpressionError):
         render_template_record("hi ${ghost}", {"topic": "X"})
@@ -179,14 +179,14 @@ def test_render_record_raises_on_unknown_or_none():
 
 
 def test_render_record_no_refs_identity():
-    from agent_compose.expr.template import render_template_record
+    from agent_composer.expr.template import render_template_record
 
     assert render_template_record("plain", {}) == "plain"
 
 
 def test_render_record_falsy_present_values_render():
     # 0 / "" / False are present (not missing) and must render, not raise.
-    from agent_compose.expr.template import render_template_record
+    from agent_composer.expr.template import render_template_record
 
     rec = {"w": 0, "s": {"on": False}, "name": ""}
     assert render_template_record("w=${w} flag=${s.on} n='${name}'", rec) == "w=0 flag=False n=''"
@@ -196,7 +196,7 @@ def test_render_record_falsy_present_values_render():
 
 
 def test_evaluate_when_record_resolves_declared_inputs():
-    from agent_compose.expr.expressions import evaluate_when_record
+    from agent_composer.expr.expressions import evaluate_when_record
 
     rec = {"label": "POSITIVE", "rating": {"value": 0.8}}
     assert evaluate_when_record("${label} == 'POSITIVE'", rec) is True
@@ -207,7 +207,7 @@ def test_evaluate_when_record_resolves_declared_inputs():
 def test_evaluate_when_record_missing_is_falsy_not_raise():
     # A declared-but-None input (or a dotted miss) propagates as falsy — the LOCKED
     # `when:` semantics — NOT a raise (unlike render_template_record).
-    from agent_compose.expr.expressions import evaluate_when_record
+    from agent_composer.expr.expressions import evaluate_when_record
 
     assert evaluate_when_record("${label} == 'POSITIVE'", {"label": None}) is False
     assert evaluate_when_record("${rating.value} > 0.7", {"rating": None}) is False
@@ -218,7 +218,7 @@ def test_evaluate_when_record_in_with_none_operand_raises():
     # pre-existing _eval_comparison behavior, shared with the pool path, unchanged. This
     # is the one leg of the locked None semantics that fails the node rather than routing
     # to default (==/!=/ordered all go falsy on None).
-    from agent_compose.expr.expressions import evaluate_when_record
+    from agent_composer.expr.expressions import evaluate_when_record
 
     with pytest.raises(ExpressionError):
         evaluate_when_record("'x' in ${opts}", {"opts": None})   # None RHS

@@ -1,0 +1,166 @@
+"""AGENT node — one node configured by `mode` + `tools` + `controls`, entered two ways.
+
+Three knobs:
+- **mode** (`AgentBody.mode`) — *how* it runs: the loop / prompting method, one of
+  the registered `MODES` (`plain` = a single call, `tool_calling` = a loop, later
+  `react`). Pick one.
+- **tools** (`AgentBody.tools`) — ordinary tools (from `agent_composer.tools`, e.g.
+  `web_search`, data fetchers) a mode may call. (`plain` ignores them;
+  `tool_calling` binds and loops over them.)
+- **controls** (`AgentBody.controls`) — *control tools* (from `nodes/agent/controls/`,
+  e.g. `ask_user`) that drive an engine effect when called, like suspending the run.
+
+**Entry — the algebraic-effect split (`entry: Fresh | Resume`).** An AGENT node is
+entered one of two ways, a closed two-variant sum:
+
+- `Fresh(prompt)` — the author's agent: render the prompt against the node's declared
+  inputs and start a new conversation; the selected `mode` runs the loop.
+- `Resume(memo, iterations, pending)` — the **delimited continuation** of an `ask_user`
+  control pause: rebuild the conversation from `memo`, append the human `answer` (its
+  sole declared input) as the `ToolMessage` matching `pending["call_id"]`, then continue
+  the loop. Minted only by the engine's continuation cloner (`clone_continuation_pair`);
+  never authored. The re-entry frame rides as node DATA, not the pool — that is what
+  keeps the resume entry self-contained and lets the closed-kind law hold with no exception.
+
+A fresh agent and a resumed agent share the loop body (`agent_step`) but are DIFFERENT
+typed arrows — `declared_inputs -> NodeResult` vs `answer -> NodeResult` — so the
+distinction is an internal variant matched in `run`, NOT a second `NodeKind` (one closed
+`kind = AGENT`).
+
+The node builds its own model (`model_from_config`) and hands the mode the prompt
+rendered against its **declared inputs** (strict AGENT — the prompt sees
+only `${name}` bound inputs, not the pool), the tools/controls, and the model. The engine
+imports an LLM SDK here by design — the old "engine imports no LLM SDK" rule was dropped;
+a mode talks to langchain directly.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Optional, Union
+
+from agent_composer.expr.template import render_template_record
+from agent_composer.nodes.agent.controls import CONTROL_TOOLS
+from agent_composer.nodes.agent.modes import MODES, AgentRunContext
+from agent_composer.nodes.base import Node, NodeKind, NodeResult
+from agent_composer.nodes.binding import ParamDecl
+
+DEFAULT_MODE = "plain"
+
+
+@dataclass(frozen=True)
+class Fresh:
+    """A fresh agent entry: render `prompt` from the node's declared inputs and start a
+    new conversation. The author path (the loader builds this from the YAML `prompt:`)."""
+
+    prompt: str = ""
+
+
+@dataclass(frozen=True)
+class Resume:
+    """A continuation entry — the `ask_user` pause resumed. Rebuild the conversation from
+    `memo` (a `messages_to_dict` blob), append the human answer as the `pending`
+    `ToolMessage`, then run one more loop segment. Internal-only graph data minted by
+    `clone_continuation_pair`; never authored. Keeping the frame here (not in the pool) is
+    what lets the resume entry stay self-contained."""
+
+    memo: list
+    iterations: int
+    pending: dict
+
+
+# The closed entry sum. `Fresh` reads the author-declared inputs (rendered into the prompt);
+# `Resume` reads a single `answer` param (the human_input forward-ref edge).
+AgentEntry = Union[Fresh, Resume]
+
+
+class AgentNode(Node):
+    kind = NodeKind.AGENT
+
+    def __init__(
+        self,
+        node_id: str,
+        *,
+        entry: Optional[AgentEntry] = None,
+        prompt: str = "",
+        tools: Optional[list[str]] = None,
+        controls: Optional[list[str]] = None,
+        llm_config: Optional[dict[str, Any]] = None,  # plain dict, not LLMConfig
+        mode: str = DEFAULT_MODE,
+        title: Optional[str] = None,
+    ) -> None:
+        super().__init__(node_id, title=title)
+        # The entry sum (Fresh | Resume). Back-compat: a bare `prompt=` (the loader/author
+        # path) is a Fresh entry; an explicit `entry=Resume(...)` is the continuation path.
+        self.entry: AgentEntry = entry if entry is not None else Fresh(prompt=prompt or "")
+        self.tools = tools or []
+        self.controls = controls or []
+        self.llm_config = llm_config
+        self.mode = mode or DEFAULT_MODE
+        if self.mode not in MODES:
+            raise ValueError(
+                f"AGENT node {node_id!r}: unknown mode {self.mode!r}; known: {sorted(MODES)}"
+            )
+        unknown = [c for c in self.controls if c not in CONTROL_TOOLS]
+        if unknown:
+            raise ValueError(
+                f"AGENT node {node_id!r}: unknown control tool(s) {unknown}; "
+                f"known: {sorted(CONTROL_TOOLS)}"
+            )
+        # A Resume entry binds a single `answer` param — the human_input forward-ref edge
+        # `${<hi>.output}` the engine wires onto it. A Fresh entry's params are the
+        # author-declared inputs, stamped on the node by the compiler.
+        if isinstance(self.entry, Resume):
+            self.params = [ParamDecl(name="answer")]
+
+    @property
+    def prompt(self) -> str:
+        """The authored prompt (read accessor over the entry sum): a `Fresh` agent's prompt,
+        or `""` for a `Resume` continuation (which has no authored prompt — its conversation is
+        the replayed `memo`). The validator + parser read this; `entry` stays the source of truth."""
+        return self.entry.prompt if isinstance(self.entry, Fresh) else ""
+
+    def _build_model(self) -> Any:
+        """Resolve this node's `llm_config` to a ready langchain chat model.
+        `llm_config` is a plain dict; `model_from_config` accepts dict|LLMConfig."""
+        from agent_composer.llm_clients import model_from_config
+
+        return model_from_config(self.llm_config if self.llm_config is not None else {})
+
+    def _ctx(self, prompt: str) -> AgentRunContext:
+        """Build the per-run mode context shared by both entry arms. `llm_config` carries
+        forward (config-as-data), so a resumed continuation rebuilds the same model."""
+        return AgentRunContext(
+            node_id=self.id,
+            prompt=prompt,
+            tools=list(self.tools),
+            controls=list(self.controls),
+            model=self._build_model(),
+            llm_config=self.llm_config,
+        )
+
+    def run(self, inputs: dict) -> NodeResult:
+        # Dispatch on the closed `entry` sum. A mid-loop control pause lowers to a
+        # continuation `Enqueue`; the engine mints the Resume half and the re-entry
+        # frame rides as graph data. `llm_config` carries forward.
+        if isinstance(self.entry, Resume):
+            # Delimited continuation: replay `memo`, append the human answer as the pending
+            # ToolMessage, then run ONE more loop segment. `agent_step` enters with
+            # pending=None (the answer is already appended), so the model is invoked once on
+            # the resumed messages — the memo is replayed as messages, not re-invoked.
+            from langchain_core.messages import ToolMessage, messages_from_dict
+
+            from agent_composer.nodes.agent.modes.tool_calling import agent_step
+
+            messages = messages_from_dict(self.entry.memo)
+            messages.append(
+                ToolMessage(
+                    content=str(inputs["answer"]), tool_call_id=self.entry.pending["call_id"]
+                )
+            )
+            return agent_step(messages, None, self.entry.iterations, self._ctx(prompt=""))
+        # Fresh: strict AGENT — the prompt interpolates only this node's
+        # declared inputs, rendered against the bound record. The selected mode builds the
+        # conversation and runs the loop.
+        ctx = self._ctx(prompt=render_template_record(self.entry.prompt, inputs))
+        return MODES[self.mode](ctx)

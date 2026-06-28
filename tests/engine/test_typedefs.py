@@ -2,8 +2,8 @@
 
 import pytest
 
-from agent_compose.state.segments import SegmentError, SegmentType
-from agent_compose.state.types import (
+from agent_composer.state.segments import SegmentError, SegmentType
+from agent_composer.state.types import (
     AliasDef,
     RecordDef,
     RefType,

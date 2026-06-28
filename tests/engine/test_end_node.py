@@ -1,5 +1,5 @@
-from agent_compose.nodes.base import NodeKind, Output
-from agent_compose.nodes.end import EndNode
+from agent_composer.nodes.base import NodeKind, Output
+from agent_composer.nodes.end import EndNode
 
 
 def test_end_kind():
@@ -48,9 +48,9 @@ def test_end_list_params_are_e0_to_en():
 def test_end_post_asserts_fire_pool_scoped_through_eval_node():
     from types import SimpleNamespace
 
-    from agent_compose.events import NodeFailed, NodeSucceeded
-    from agent_compose.runtime.eval_node import eval_node
-    from agent_compose.state.pool import TypedVariablePool
+    from agent_composer.events import NodeFailed, NodeSucceeded
+    from agent_composer.runtime.eval_node import eval_node
+    from agent_composer.state.pool import TypedVariablePool
 
     node = EndNode.record("__end__", output_names=["n"])
     node.post_asserts = ["${emit.output.n} > 0"]  # a ${X.output} ref -> needs POOL scope

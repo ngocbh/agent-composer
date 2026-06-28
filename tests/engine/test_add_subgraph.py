@@ -1,4 +1,4 @@
-from agent_compose.compile.model import CompiledFlow, Edge, START_ID, END_ID
+from agent_composer.compile.model import CompiledFlow, Edge, START_ID, END_ID
 from tests.engine._fakes import FuncNode
 
 

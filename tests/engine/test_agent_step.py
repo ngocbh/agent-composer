@@ -10,9 +10,9 @@ descriptor + a `resume_agent` descriptor reading `answer` via the BARE forward-r
 
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 
-from agent_compose.nodes.agent.modes.common import AgentRunContext
-from agent_compose.nodes.agent.modes.tool_calling import agent_step
-from agent_compose.nodes.base import Output, Enqueue
+from agent_composer.nodes.agent.modes.common import AgentRunContext
+from agent_composer.nodes.agent.modes.tool_calling import agent_step
+from agent_composer.nodes.base import Output, Enqueue
 
 
 class _Chat:

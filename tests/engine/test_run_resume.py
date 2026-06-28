@@ -1,10 +1,10 @@
 import pytest
 
-from agent_compose.compose.loader import load_flow
-from agent_compose.compose.run import resume_command, run_flow, resume_flow
-from agent_compose.suspension.commands import DeliverAnswerCommand
-from agent_compose.suspension.checkpoint import RunCheckpoint
-from agent_compose.suspension.pause import EventAwaited
+from agent_composer.compose.loader import load_flow
+from agent_composer.compose.run import resume_command, run_flow, resume_flow
+from agent_composer.suspension.commands import DeliverAnswerCommand
+from agent_composer.suspension.checkpoint import RunCheckpoint
+from agent_composer.suspension.pause import EventAwaited
 
 FLOW = """
 id: f
@@ -171,7 +171,7 @@ def test_resume_command_does_not_require_node_in_compiled_flow():
     # resume_command must dispatch on the reason SHAPE, never deref loaded.compiled.nodes.
     from types import SimpleNamespace
 
-    from agent_compose.suspension.pause import HumanInputRequired
+    from agent_composer.suspension.pause import HumanInputRequired
 
     loaded = SimpleNamespace(compiled=SimpleNamespace(nodes={}))   # EMPTY static graph
     reason = HumanInputRequired(prompt="?", node_id="call_sub/w")  # a live namespaced id

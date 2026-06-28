@@ -6,9 +6,9 @@ dispatcher's `_apply_enqueue` REF arm (clone the child namespaced, substitute th
 value, fire its out-edges).
 """
 
-from agent_compose.events import NodeExpanded, NodeStarted
-from agent_compose.nodes.base import Enqueue, NodeKind
-from agent_compose.state.pool import TypedVariablePool
+from agent_composer.events import NodeExpanded, NodeStarted
+from agent_composer.nodes.base import Enqueue, NodeKind
+from agent_composer.state.pool import TypedVariablePool
 from tests.engine._fakes import EnqueueNode, drive, stamp_reads
 
 
@@ -36,12 +36,12 @@ def test_eval_node_emits_node_expanded_for_list_enqueue():
 # --- _apply_enqueue REF arm — clone namespaced, substitute spawner, fire out-edge -------- #
 
 import pytest
-from agent_compose.events import RunSucceeded
-from agent_compose.compile.model import CompiledFlow, Edge, FlowOutput, NodeState, START_ID, END_ID
-from agent_compose.compose.shapes import InputDecl, read_shape
-from agent_compose.nodes.end import EndNode
-from agent_compose.nodes.start import StartNode
-from agent_compose.runtime.engine import FlowEngine
+from agent_composer.events import RunSucceeded
+from agent_composer.compile.model import CompiledFlow, Edge, FlowOutput, NodeState, START_ID, END_ID
+from agent_composer.compose.shapes import InputDecl, read_shape
+from agent_composer.nodes.end import EndNode
+from agent_composer.nodes.start import StartNode
+from agent_composer.runtime.engine import FlowEngine
 from tests.engine._fakes import FuncNode, derive_wiring
 
 
@@ -54,7 +54,7 @@ def _with_boundary(nodes: dict, edges: list, outputs: list, input_decls=()) -> t
     # child START_ID carries `input_decls` (so its params == the call-arg names the splice seeds);
     # END_ID is RECORD-mode from the declared outputs; the manual `(.., END_ID)` terminal Edge is
     # replaced by the producer edge (input_group = output name) so the engine reads store[END_ID].
-    from agent_compose.compose.build import _binding_producers
+    from agent_composer.compose.build import _binding_producers
 
     decls = list(input_decls)
     nodes = dict(nodes)
@@ -125,7 +125,7 @@ def test_apply_enqueue_raise_surfaces_as_run_failed(num_workers):
     # expects a continuation PAIR [human_input_desc, resume_agent_desc] but this Enqueue's target
     # is a child CompiledFlow, so `clone_continuation_pair`'s `hi, resume = pair` unpack raises
     # INSIDE _apply_enqueue — exactly the dispatcher-thread raise the wrap must catch.
-    from agent_compose.events import RunFailed
+    from agent_composer.events import RunFailed
 
     parent = _parent_with_spawner(_child_flow(), {"x": 7})
     parent.nodes["sp"].kind = NodeKind.AGENT     # spawner kind; the Enqueue target is not a pair -> raise
@@ -136,8 +136,8 @@ def test_apply_enqueue_raise_surfaces_as_run_failed(num_workers):
 
 # --- runtime bounds (MAX_TOTAL_NODES + MAX_REF_DEPTH) + REF-inside-MAP nesting proof ------- #
 
-from agent_compose.compose import load_flow
-from agent_compose.state.pool import TypedVariablePool
+from agent_composer.compose import load_flow
+from agent_composer.state.pool import TypedVariablePool
 
 
 # A REF-inside-MAP: parent MAP "each" over the elements; the child "mid" is itself a REF
@@ -249,8 +249,8 @@ def _ref_chain_flow(depth: int):
 
 @pytest.mark.parametrize("num_workers", [0, 4])
 def test_deep_ref_chain_trips_max_ref_depth(num_workers):
-    from agent_compose.events import RunFailed
-    from agent_compose.runtime.engine import FlowEngine, MAX_REF_DEPTH
+    from agent_composer.events import RunFailed
+    from agent_composer.runtime.engine import FlowEngine, MAX_REF_DEPTH
 
     # a REF that calls a REF that calls a REF ... deeper than MAX_REF_DEPTH (a genuine chain,
     # NOT a wide fan-out) -> the depth bound fires before MAX_TOTAL_NODES. The RuntimeError
@@ -282,8 +282,8 @@ def _wide_child(n: int) -> CompiledFlow:
 
 @pytest.mark.parametrize("num_workers", [0, 4])
 def test_over_budget_expansion_trips_max_total_nodes(num_workers):
-    from agent_compose.events import RunFailed
-    from agent_compose.runtime.engine import FlowEngine, MAX_TOTAL_NODES
+    from agent_composer.events import RunFailed
+    from agent_composer.runtime.engine import FlowEngine, MAX_TOTAL_NODES
 
     parent = _parent_with_spawner(_wide_child(MAX_TOTAL_NODES + 10), {"x": 0})  # one clone busts it
     events = list(FlowEngine(parent, num_workers=num_workers).run())

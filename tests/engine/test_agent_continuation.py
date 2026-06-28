@@ -11,14 +11,14 @@ via the stub call count), a 2-pause agent does not deadlock, and a many-pause ag
 depth UNCHANGED — it is bounded by MAX_TOOL_ITERATIONS / MAX_TOTAL_NODES).
 """
 
-import agent_compose.llm_clients as llm
+import agent_composer.llm_clients as llm
 from langchain_core.messages import AIMessage
 
-from agent_compose import load_flow
-from agent_compose.compose import run_flow
-from agent_compose.compose.run import resume_command
-from agent_compose.events import RunPaused, RunSucceeded
-from agent_compose.suspension.pause import HumanInputRequired
+from agent_composer import load_flow
+from agent_composer.compose import run_flow
+from agent_composer.compose.run import resume_command
+from agent_composer.events import RunPaused, RunSucceeded
+from agent_composer.suspension.pause import HumanInputRequired
 
 ASK = """
 id: ag
@@ -99,8 +99,8 @@ def test_many_pause_agent_does_not_trip_max_ref_depth(monkeypatch):
     # MAX_REF_DEPTH. It is bounded by MAX_TOOL_ITERATIONS (the agent_step cap) and by
     # MAX_TOTAL_NODES (the +2 nodes/pause budget check on the agent arm), NOT by the
     # REF depth bound. This is the regression test for the carry-depth-unchanged invariant.
-    from agent_compose.nodes.agent.modes.tool_calling import MAX_TOOL_ITERATIONS
-    from agent_compose.runtime.engine import MAX_REF_DEPTH
+    from agent_composer.nodes.agent.modes.tool_calling import MAX_TOOL_ITERATIONS
+    from agent_composer.runtime.engine import MAX_REF_DEPTH
 
     # n must EXCEED MAX_REF_DEPTH (to prove the agent arm never trips the depth bound) yet stay
     # UNDER MAX_TOOL_ITERATIONS so the FINAL turn (entered with iterations==n) still fits the cap

@@ -1,0 +1,47 @@
+# agent_composer — the engine
+
+The implementation of **Agent Compose**: a from-scratch flow engine. A flow is authored 
+as **Docker-Compose-shaped YAML**, read by the `compose/` loader into a compiled IR,
+and executed by the engine's own scheduler — there is no compilation down to a third-party graph runtime.
+
+The engine is, at heart, a **small functional programming language** — one whose
+leaf computations may be LLM agents. If you know OCaml, you already know the
+shape of it:
+
+- A **flow is a function**: typed inputs in, typed outputs out, and nothing
+  hidden. An **agent is just a flow** whose leaf computation happens to be an LLM
+  loop — same contract, same composability.
+- Flows **compose**. A node can *be* another flow, so you build a big
+  transformation out of small ones, nested to any depth — function composition,
+  not a monolith.
+- Computation is **pure at the boundary**: a node *returns* its outputs and the
+  engine *binds* them; a node never reaches in and mutates shared state. Outputs
+  are immutable, typed, losslessly serializable values.
+- The **program's structure is fixed by the author**, the way a function's call
+  graph is fixed by its source. The LLM fills leaf boxes; it does **not** rewrite
+  the graph at runtime. That referential transparency is what makes runs
+  reproducible, checkpointable, and resumable.
+
+## Layout
+
+```
+state/        typed value system (segments) + variable pool              [leaf, no deps]
+events.py     run + node event vocabulary
+expr/         ${...} resolution + when: evaluator on the typed pool
+nodes/        Node contract (base) + per-kind implementations
+              (start, end, agent, code, model, tool, if_else, call, map,
+               human_input, wait)
+compile/      compiled IR (CompiledFlow) + representation-neutral validation
+compose/      the Compose-YAML loader: text -> CompiledFlow
+              (parser/shapes/build/cases/validate/asserts/loader/run)
+runtime/      state_manager, single-threaded engine, parallel worker pool
+suspension/   pause reasons, commands, checkpoint
+llm_clients/  provider clients (lazy-imported) + LLMConfig + model_from_config
+tools/        the tool registry (TOOL_REGISTRY / register_tool / resolve_tools)
+cli/          the `ac` command-line entry point
+_settings.py  env-based default provider/model
+```
+
+Import direction (acyclic): `events <- state <- nodes <- compile <- compose`,
+with `compile`/`state`/`nodes`/`expr` feeding `compose` (the front-end that reads
+YAML into the IR), `expr` feeding nodes, and `suspension` feeding runtime.

@@ -1,0 +1,122 @@
+# Examples
+
+The [`examples/`](https://github.com/ngocbh/agent-composer/tree/main/examples)
+directory ships a set of generic flows, smallest first. Run any of them with
+`ac run examples/<file> --input ...` (set a provider/model first — see
+[Installation](installation.md)).
+
+## `hello.yaml` — the smallest flow
+
+One AGENT, a string in and a string out.
+
+```yaml
+input:
+  name: str
+nodes:
+  greet:
+    kind: agent
+    input:
+      name: ${input.name}
+    output: str
+    prompt: |-
+      Write a short, warm one-sentence greeting addressed to ${name}.
+output: ${greet.output}
+```
+
+```console
+ac run examples/hello.yaml --input name=Ada
+```
+
+Shows the core shape: typed `input:`, a single AGENT leaf, a local prompt
+reference (`${name}`), and the flow `output:`.
+
+## `summarize.yaml` — one transform
+
+A single AGENT that condenses a block of text into one sentence. Same shape as
+`hello`, with a longer prompt.
+
+```console
+ac run examples/summarize.yaml --input text="...long text..."
+```
+
+## `classify.yaml` — a constrained output
+
+An AGENT whose `output:` is a `Literal[...]` enum, so the model must answer with
+exactly one tag, and the flow returns a multi-field object.
+
+```yaml
+nodes:
+  label:
+    kind: agent
+    input:
+      text: ${input.text}
+    output: Literal[positive, neutral, negative]
+    prompt: "Classify the sentiment of: ${text}"
+output:
+  sentiment: ${label.output}
+```
+
+```console
+ac run examples/classify.yaml --input text="I love this!"
+```
+
+## `human-approval.yaml` — a deterministic human gate
+
+Exercises the **`human_input`** node. An agent drafts a plan, a `human_input`
+node always pauses for an `approve` / `revise` answer (a `Literal` typedef),
+`case ... on` routes on the typed answer, and a coalesce joins whichever branch
+ran.
+
+```console
+ac run examples/human-approval.yaml --input task="Plan a team offsite"
+#   → pauses and prompts you to approve or revise
+```
+
+Run it from the CLI to see interactive resume; the pause is **guaranteed**.
+
+## `ask-user.yaml` — a model-chosen clarifying question
+
+Exercises the **`ask_user` control** on a `tool_calling` agent. The agent
+suspends to ask a clarifying question **only if** it judges the request
+ambiguous — otherwise it answers outright. Whether the pause happens depends on
+the prompt and the model.
+
+```console
+ac run examples/ask-user.yaml --input request="Book me a table for dinner"
+```
+
+Contrast with `human-approval.yaml`: `human_input` always pauses; `ask_user`
+pauses only if the model decides to.
+
+## `decision-brief.yaml` — a realistic multi-stage flow
+
+The fullest example. Given a decision question it:
+
+1. **fans out** to three independent angle agents (the case for, against, the
+   risks) — no edges between them, so they run in parallel;
+2. **fans in** to a synth agent that picks a typed `Decision` enum;
+3. **routes** on that decision with `case ... on` to a decision-specific brief;
+4. **finalizes** by combining the decision with whichever brief ran (an n-ary
+   `|` coalesce consumed downstream);
+5. returns a **multi-field object**, guarded by an `assert`.
+
+```console
+ac run examples/decision-brief.yaml --input question="Should a small team adopt a monorepo?"
+```
+
+It uses a `Literal` typedef, an `Optional` input with a default, fan-out +
+fan-in, a typed enum output, `case ... on` with `else`, a coalesce, multi-output,
+and asserts — all with AGENT nodes, so it runs against any provider with no extra
+Python.
+
+!!! note "Why the verdict is an enum, not a record"
+    The synth node's verdict is a `Decision` enum rather than a
+    `{decision, confidence}` record because AGENT nodes return text, which can
+    coerce to `str` or a `Literal[...]` tag but not to a record or number. A
+    structured/numeric verdict would need a `code` or `model` producer. See the
+    note in [Flow syntax → `agent`](syntax.md#agent-an-llm-leaf).
+
+## Next
+
+- [Flow syntax](syntax.md) — the full reference for these constructs.
+- [Python API](api.md) — drive these flows from code.

@@ -1,0 +1,225 @@
+"""Inline `${ f(arg=...) }` call desugar — the compose half.
+
+`expr.desugar_calls` is the pure string→data half (find a call operand inside a
+`${…}` span, rewrite it to `${<synth>.output}`, emit an `InlineCall`). This module
+is the loader pass that runs it over a flow's parsed descriptors + `outputs:`
+section and turns each `InlineCall` into a synthetic `call` node (a `CallDescriptor`,
+`over=None`). After it runs, the rest of `_assemble` (build → edge-infer → validate
+→ DAG) sees the synth nodes as ordinary `call` nodes — inline calls are pure
+load-time sugar, no new runtime kind, the synth callee resolves through the SAME
+composite resolver (defs-first) as a named call.
+
+Binding positions + the flow `asserts:` section: a node's `inputs:` (agent/code/model/call),
+a TOOL's `args:`, a mapped call's `over:`, the flow `outputs:` bindings, AND each flow
+`asserts:` expression (a span-wrapped `${ f(...) }` lifts to a synth node so the assert reads
+its output). NOT `when:`/`on:` (the case condition grammar) and NOT a node-local
+`asserts:` (those stay node-local — no inline call). A `case` descriptor carries no walked
+bindings, so it is untouched.
+
+Two guards (loud): an inline call cannot capture `${item}` (the synth node is a
+top-level node with no map-element scope — use a named `call` node with `over:`), and
+a user node id may not use the reserved synth prefix `__call_`.
+
+Imports flow DOWN/peer only: `compose.parser` (descriptors) + `compose.errors`
+(peer), `expr` (the desugar + ref-walk). Only the loader imports this back.
+"""
+
+from __future__ import annotations
+
+import itertools
+from dataclasses import replace
+from typing import Any, Callable, Optional
+
+from agent_composer.expr import (
+    ExpressionError,
+    InlineCall,
+    binding_refs,
+    desugar_calls,
+    parse_binding,
+)
+from agent_composer.compose.errors import LoadError
+from agent_composer.compose.parser import (
+    AgentDescriptor,
+    CallDescriptor,
+    CodeDescriptor,
+    ModelDescriptor,
+    NodeDescriptor,
+    ToolDescriptor,
+)
+
+# The reserved id prefix for synthesized inline-call nodes. A monotonic counter per
+# flow/def keeps them unique; the collision guard reserves the namespace from users.
+_SYNTH_PREFIX = "__call_"
+
+
+def _synth_id_gen() -> Callable[[], str]:
+    """A fresh `__call_0`, `__call_1`, … minter (one per flow/def `_assemble` run)."""
+    counter = itertools.count()
+    return lambda: f"{_SYNTH_PREFIX}{next(counter)}"
+
+
+def desugar_inline_calls(
+    descriptors: dict[str, NodeDescriptor],
+    outputs_section: Any,
+    *,
+    asserts_section: Optional[list] = None,
+    node_lines: Optional[dict[str, int]] = None,
+    outputs_line: Optional[int] = None,
+    asserts_line: Optional[int] = None,
+    next_id: Optional[Callable[[], str]] = None,
+) -> tuple:
+    """Desugar every inline call in a flow's binding sites into synth `call` nodes.
+
+    Returns `(new_descriptors, new_outputs, new_asserts)`: the descriptor map augmented with
+    one synth `CallDescriptor` per inline call (the host binding rewritten to
+    `${<synth>.output}`), the flow `outputs:` section, and the `asserts:` list — each with its
+    inline calls rewritten the same way. A span-wrapped inline `${ f(...) }` in an assert
+    expression (`${ f(...) } == x`) lifts to a synth node so the assert reads its output.
+    Raises `LoadError` on a malformed inline call, a `${item}` capture, or a reserved-prefix
+    collision — located at the host node / `outputs:` / `asserts:` line where known."""
+    lines = node_lines or {}
+    mint = next_id or _synth_id_gen()
+
+    # Reserve the synth namespace: a user node id must not use the prefix (else it
+    # could collide with / shadow a generated id). Checked unconditionally.
+    for nid in descriptors:
+        if nid.startswith(_SYNTH_PREFIX):
+            raise LoadError(
+                f"node id {nid!r} uses the reserved inline-call prefix {_SYNTH_PREFIX!r}",
+                line=lines.get(nid),
+            )
+
+    synth: dict[str, CallDescriptor] = {}
+    new_descriptors: dict[str, NodeDescriptor] = {}
+    for nid, desc in descriptors.items():
+        new_desc, calls = _desugar_descriptor(desc, mint, host=nid, line=lines.get(nid))
+        new_descriptors[nid] = new_desc
+        for call in calls:
+            synth[call.id] = _to_call_descriptor(call, host=f"node {nid!r}", line=lines.get(nid))
+
+    new_outputs, out_calls = _desugar_outputs(outputs_section, mint, outputs_line)
+    for call in out_calls:
+        synth[call.id] = _to_call_descriptor(call, host="flow outputs", line=outputs_line)
+
+    new_asserts, assert_calls = _desugar_asserts(asserts_section, mint, asserts_line)
+    for call in assert_calls:
+        synth[call.id] = _to_call_descriptor(call, host="assert", line=asserts_line)
+
+    new_descriptors.update(synth)
+    return new_descriptors, new_outputs, new_asserts
+
+
+# --------------------------------------------------------------------------- #
+# Shared binding-field walk (used by this pass AND the case-value
+# expansion in `compose.cases`). One place for "which fields are bindings".
+# --------------------------------------------------------------------------- #
+
+
+def map_binding_strings_in_descriptor(
+    desc: NodeDescriptor, fn: Callable[[str], Any]
+) -> NodeDescriptor:
+    """Apply `fn` to each STRING binding field of `desc`, returning a new (frozen)
+    descriptor: `inputs` (agent/code/model/call), `args` (tool), `over` (call). A
+    `case` (conditions, not bindings) and any other shape pass through unchanged.
+    Non-string values (literals / native YAML) are left as-is. `fn` may raise."""
+    if isinstance(desc, (AgentDescriptor, CodeDescriptor, ModelDescriptor)):
+        return replace(desc, inputs=_map_strings(desc.inputs, fn))
+    if isinstance(desc, ToolDescriptor):
+        return replace(desc, args=_map_strings(desc.args, fn))
+    if isinstance(desc, CallDescriptor):
+        new_over = fn(desc.over) if isinstance(desc.over, str) else desc.over
+        return replace(desc, inputs=_map_strings(desc.inputs, fn), over=new_over)
+    return desc
+
+
+def map_outputs_strings(outputs: Any, fn: Callable[[str], Any]) -> Any:
+    """Apply `fn` to each STRING binding in the flow `outputs:` section (a name→binding
+    map, a bare binding string, or `None`)."""
+    if isinstance(outputs, dict):
+        return {k: (fn(v) if isinstance(v, str) else v) for k, v in outputs.items()}
+    if isinstance(outputs, str):
+        return fn(outputs)
+    return outputs
+
+
+def _map_strings(mapping: Optional[dict], fn: Callable[[str], Any]) -> dict:
+    return {k: (fn(v) if isinstance(v, str) else v) for k, v in (mapping or {}).items()}
+
+
+def _desugar_descriptor(
+    desc: NodeDescriptor, mint: Callable[[], str], *, host: str, line: Optional[int]
+) -> tuple:
+    """Desugar a descriptor's binding fields, returning `(new_desc, inline_calls)`.
+
+    Walks the binding fields via `map_binding_strings_in_descriptor`; the closure
+    `fn` desugars each string and accumulates the inline calls it finds."""
+    calls: list = []
+    new_desc = map_binding_strings_in_descriptor(
+        desc, lambda value: _desugar_value(value, mint, calls, host, line)
+    )
+    return new_desc, calls
+
+
+def _desugar_value(
+    value: str, mint: Callable[[], str], calls: list, host: str, line: Optional[int]
+) -> str:
+    """Desugar one binding string, accumulating its inline calls; map an
+    `ExpressionError` (a malformed inline call) to a located `LoadError`."""
+    try:
+        new_value, found = desugar_calls(value, mint)
+    except ExpressionError as exc:
+        raise LoadError(f"{host}: {exc}", line=line) from exc
+    calls.extend(found)
+    return new_value
+
+
+def _desugar_outputs(outputs: Any, mint: Callable[[], str], line: Optional[int]) -> tuple:
+    """Desugar the flow `outputs:` section, returning `(new_outputs, inline_calls)`.
+    `line` is the `outputs:` section source line, so a malformed inline call there
+    locates like a node host."""
+    calls: list = []
+    new_outputs = map_outputs_strings(
+        outputs, lambda value: _desugar_value(value, mint, calls, "flow outputs", line)
+    )
+    return new_outputs, calls
+
+
+def _desugar_asserts(asserts: Optional[list], mint: Callable[[], str], line: Optional[int]) -> tuple:
+    """Desugar an inline `${ f(...) }` in each flow-assert string, returning
+    `(new_asserts, inline_calls)`. A non-string assert (shouldn't occur — the schema is
+    `list[str]`) passes through. `None`/empty returns unchanged."""
+    if not asserts:
+        return asserts, []
+    calls: list = []
+    new_asserts = [
+        _desugar_value(a, mint, calls, "assert", line) if isinstance(a, str) else a
+        for a in asserts
+    ]
+    return new_asserts, calls
+
+
+def _to_call_descriptor(call: InlineCall, *, host: str, line: Optional[int]) -> CallDescriptor:
+    """One `InlineCall` -> a synth `CallDescriptor` (`over=None`), after the `${item}`
+    guard. The synth node id has no source line (its downstream errors stay unlocated
+    — the defs line-mapping deferral); the guard itself locates at the host."""
+    for name, value in call.args.items():
+        if _captures_item(value):
+            raise LoadError(
+                f"{host}: inline call {call.callee!r} cannot capture ${{item}} "
+                f"(arg {name!r}) — it desugars to a top-level call node with no "
+                f"map-element scope; use a named `call` node (whose per-element "
+                f"`inputs:` may read `${{item}}`)",
+                line=line,
+            )
+    return CallDescriptor(id=call.id, call=call.callee, inputs=dict(call.args), over=None)
+
+
+def _captures_item(value: Any) -> bool:
+    """True if a binding-string arg value reads `${item}` (a ref with head `item`)."""
+    if not isinstance(value, str):
+        return False
+    try:
+        refs = binding_refs(parse_binding(value))
+    except ExpressionError:
+        return False  # malformed -> surfaced (located) by the downstream ref-wiring pass
+    return any(ref.split(".")[0] == "item" for ref in refs)

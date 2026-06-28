@@ -2,9 +2,9 @@
 
 from datetime import datetime
 
-from agent_compose.state.pool import TypedVariablePool
-from agent_compose.state.segments import DateSegment, DateTimeSegment
-from agent_compose.state.seeding import (
+from agent_composer.state.pool import TypedVariablePool
+from agent_composer.state.segments import DateSegment, DateTimeSegment
+from agent_composer.state.seeding import (
     default_run_id,
     now_utc,
     seed_system_clock,

@@ -1,8 +1,8 @@
 import pytest
 
-from agent_compose.expr.template import parse_binding, _check_path
-from agent_compose.expr.expressions import ExpressionError
-from agent_compose.compose.cases import _CASE_OUTPUT_INTERIOR
+from agent_composer.expr.template import parse_binding, _check_path
+from agent_composer.expr.expressions import ExpressionError
+from agent_composer.compose.cases import _CASE_OUTPUT_INTERIOR
 
 
 def test_namespaced_path_parses():

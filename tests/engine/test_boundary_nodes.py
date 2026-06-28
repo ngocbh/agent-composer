@@ -5,9 +5,9 @@ ${input.X} resolves to store[START_ID]. Assertions check the NODES exist + edges
 adjacency, never that the strings are absent (they ARE the node ids).
 """
 
-from agent_compose.compile.model import END_ID, START_ID
-from agent_compose.compose import load_flow, run_flow
-from agent_compose.nodes.base import NodeKind
+from agent_composer.compile.model import END_ID, START_ID
+from agent_composer.compose import load_flow, run_flow
+from agent_composer.nodes.base import NodeKind
 
 _FLOW = """
 id: f
@@ -84,7 +84,7 @@ def test_run_result_is_end_node_value():
 
 
 def test_terminal_helpers_retired():
-    from agent_compose.runtime.engine import FlowEngine
+    from agent_composer.runtime.engine import FlowEngine
     # the three terminal helpers are gone (END_ID commits the value; the disposition handles skip).
     assert not hasattr(FlowEngine, "terminal_output")
     assert not hasattr(FlowEngine, "_emit_terminal")
@@ -102,14 +102,14 @@ def test_terminal_coskip_fails_via_end_disposition():
 
 # --- START_ID seeded at engine init + ${input.X} -> store[START_ID]; inputs namespace retired -- #
 def test_inputs_resolve_to_start_node():
-    from agent_compose.state.pool import TypedVariablePool
+    from agent_composer.state.pool import TypedVariablePool
     pool = TypedVariablePool()
     pool.set(START_ID, {"x": "ACME"})                 # START_ID commits the bound input record
     assert pool.resolve("input", ["x"]) == "ACME"    # ${input.x} == store[START_ID].x
 
 
 def test_pool_inputs_namespace_retired():
-    from agent_compose.state.pool import TypedVariablePool
+    from agent_composer.state.pool import TypedVariablePool
     pool = TypedVariablePool()
     assert not hasattr(pool, "add_inputs")
     assert "inputs" not in TypedVariablePool.model_fields   # the `inputs` field is gone
@@ -132,9 +132,9 @@ def test_engine_seeds_store_start_without_scheduling_start_or_emitting_succeeded
     # the engine invokes StartNode.run(run-args) ONCE at init, commits store[START_ID],
     # and does NOT enqueue START_ID / emit a NodeSucceeded for START_ID. The run succeeds and the value
     # came from the seed, not from START_ID being scheduled.
-    from agent_compose.events import NodeSucceeded
-    from agent_compose.runtime.engine import FlowEngine
-    from agent_compose.state.pool import TypedVariablePool
+    from agent_composer.events import NodeSucceeded
+    from agent_composer.runtime.engine import FlowEngine
+    from agent_composer.state.pool import TypedVariablePool
 
     loaded = load_flow(_FLOW)
     pool = TypedVariablePool()

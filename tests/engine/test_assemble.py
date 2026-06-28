@@ -12,19 +12,19 @@ from pathlib import Path
 
 import pytest
 
-from agent_compose.compile.model import END_ID, START_ID
-from agent_compose.state.types import read_typedefs
-from agent_compose.compose import LoadError
-from agent_compose.compose.build import (
+from agent_composer.compile.model import END_ID, START_ID
+from agent_composer.state.types import read_typedefs
+from agent_composer.compose import LoadError
+from agent_composer.compose.build import (
     build_leaf_node,
     check_wiring_parity,
     infer_data_edges,
     synthesize_boundary_graph,
     synthesize_roots,
 )
-from agent_compose.compose.loader import _flow_outputs
-from agent_compose.compose.cases import desugar_case, reconcile_case_edges
-from agent_compose.compose.parser import (
+from agent_composer.compose.loader import _flow_outputs
+from agent_composer.compose.cases import desugar_case, reconcile_case_edges
+from agent_composer.compose.parser import (
     AgentDescriptor,
     CaseDescriptor,
     CodeDescriptor,

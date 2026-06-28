@@ -1,8 +1,8 @@
 """Unit tests for the CompiledFlow topology model."""
 
-from agent_compose.compile.model import END_ID, START_ID, Edge, CompiledFlow
-from agent_compose.nodes.end import EndNode
-from agent_compose.nodes.start import StartNode
+from agent_composer.compile.model import END_ID, START_ID, Edge, CompiledFlow
+from agent_composer.nodes.end import EndNode
+from agent_composer.nodes.start import StartNode
 from tests.engine._fakes import FuncNode
 
 
@@ -103,7 +103,7 @@ output: ${hard.output}
 
 
 def test_data_edge_optional_reflects_binding_escape():
-    from agent_compose.compose import load_flow
+    from agent_composer.compose import load_flow
 
     flow = load_flow(_OPTIONAL_EDGE_FLOW).compiled
     by_to = {e.to: e for e in flow.edges if e.input_group == "v"}
@@ -146,7 +146,7 @@ output: ${gate.output}
 
 
 def test_case_condition_escape_marks_optional():
-    from agent_compose.compose import load_flow
+    from agent_composer.compose import load_flow
 
     flow = load_flow(_CASE_ESCAPE_FLOW).compiled
     a_to_gate = [e for e in flow.edges if e.from_ == "a" and e.to == "gate"]

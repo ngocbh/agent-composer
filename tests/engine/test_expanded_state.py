@@ -1,4 +1,4 @@
-from agent_compose.compile.model import NodeState
+from agent_composer.compile.model import NodeState
 
 
 def test_expanded_member_value():

@@ -7,9 +7,9 @@ else raising `ValueError`. `WaitNode._resolve_until` now delegates here.
 
 import pytest
 
-from agent_compose.compile.model import START_ID
-from agent_compose.nodes.wait.node import resolve_until
-from agent_compose.state.pool import TypedVariablePool
+from agent_composer.compile.model import START_ID
+from agent_composer.nodes.wait.node import resolve_until
+from agent_composer.state.pool import TypedVariablePool
 
 
 def test_literal_iso_passthrough():

@@ -1,14 +1,14 @@
 """Unit tests for the Node.run() contract pipeline."""
 
-from agent_compose.events import (
+from agent_composer.events import (
     NodeFailed,
     NodeStarted,
     NodeSucceeded,
     PauseRequested,
     StreamChunk,
 )
-from agent_compose.state.pool import TypedVariablePool
-from agent_compose.state.segments import SegmentType, Shape
+from agent_composer.state.pool import TypedVariablePool
+from agent_composer.state.segments import SegmentType, Shape
 from tests.engine._fakes import (
     BranchNode,
     FailNode,

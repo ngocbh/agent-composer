@@ -9,16 +9,16 @@ import json
 
 import pytest
 
-from agent_compose.events import RunPaused, RunResumed, RunSucceeded
-from agent_compose.compile.model import END_ID, START_ID, Edge, CompiledFlow, NodeState, FlowOutput
-from agent_compose.nodes.base import Node, NodeKind, Output
-from agent_compose.nodes.human_input import HumanInputNode
-from agent_compose.nodes.wait import WaitNode
-from agent_compose.runtime.engine import FlowEngine
-from agent_compose.state.pool import TypedVariablePool
-from agent_compose.suspension.checkpoint import RunCheckpoint
-from agent_compose.suspension.commands import DeliverAnswerCommand
-from agent_compose.suspension.pause import HumanInputRequired, EventAwaited
+from agent_composer.events import RunPaused, RunResumed, RunSucceeded
+from agent_composer.compile.model import END_ID, START_ID, Edge, CompiledFlow, NodeState, FlowOutput
+from agent_composer.nodes.base import Node, NodeKind, Output
+from agent_composer.nodes.human_input import HumanInputNode
+from agent_composer.nodes.wait import WaitNode
+from agent_composer.runtime.engine import FlowEngine
+from agent_composer.state.pool import TypedVariablePool
+from agent_composer.suspension.checkpoint import RunCheckpoint
+from agent_composer.suspension.commands import DeliverAnswerCommand
+from agent_composer.suspension.pause import HumanInputRequired, EventAwaited
 from tests.engine._fakes import FuncNode, derive_wiring, drive, stamp_reads
 from tests.engine._graph_builder import _graph
 
@@ -274,7 +274,7 @@ def test_snapshot_deep_copies_expansion_descriptors():
     """the Expansion ledger is deep-copied into the checkpoint, so a
     later live append (e.g. a multi-pause AGENT growing AgentExpansion.segments) does not
     mutate a held checkpoint."""
-    from agent_compose.suspension.expansions import AgentExpansion, AgentSegment
+    from agent_composer.suspension.expansions import AgentExpansion, AgentSegment
 
     engine = FlowEngine(_ask_flow())
     list(engine.run())                                             # park so snapshot() is valid
@@ -308,7 +308,7 @@ def test_wait_node_suspends_with_market_event():
 
 
 def test_event_awaited_type_literal_round_trip():
-    from agent_compose.suspension.pause import EventAwaited
+    from agent_composer.suspension.pause import EventAwaited
     r = EventAwaited(event_spec={"kind": "x"})
     assert r.type == "event_awaited"
     import json
@@ -316,10 +316,10 @@ def test_event_awaited_type_literal_round_trip():
 
 
 def test_wait_timed_until_pauses():
-    from agent_compose.nodes.wait import WaitNode
-    from agent_compose.state.pool import TypedVariablePool
-    from agent_compose.events import PauseRequested
-    from agent_compose.suspension.pause import ScheduledPause
+    from agent_composer.nodes.wait import WaitNode
+    from agent_composer.state.pool import TypedVariablePool
+    from agent_composer.events import PauseRequested
+    from agent_composer.suspension.pause import ScheduledPause
     pool = TypedVariablePool()
     pool.set(START_ID, {"settle_at": "2026-07-01"})     # a date input (stored as ISO string)
     node = WaitNode("settle", is_timed=True)
@@ -332,9 +332,9 @@ def test_wait_timed_until_pauses():
 
 
 def test_human_input_renders_prompt_from_inputs():
-    from agent_compose.nodes.human_input import HumanInputNode
-    from agent_compose.state.pool import TypedVariablePool
-    from agent_compose.events import PauseRequested
+    from agent_composer.nodes.human_input import HumanInputNode
+    from agent_composer.state.pool import TypedVariablePool
+    from agent_composer.events import PauseRequested
     pool = TypedVariablePool()
     pool.set("propose", "order ACME")            # producer value
     node = HumanInputNode("approve", prompt="Approve? ${action}")
@@ -346,7 +346,7 @@ def test_human_input_renders_prompt_from_inputs():
 
 def test_human_input_run_takes_no_scratch_cap():
     import inspect
-    from agent_compose.nodes.human_input import HumanInputNode
+    from agent_composer.nodes.human_input import HumanInputNode
     sig = inspect.signature(HumanInputNode.run)
     assert "scratch" not in sig.parameters     # HUMAN_INPUT.run takes no *, scratch cap
 
@@ -354,7 +354,7 @@ def test_human_input_run_takes_no_scratch_cap():
 def test_checkpoint_v5_is_current_version():
     # the engine's blob version is now 5.0 (adds the additive expansions field).
     # A pre-5.0 blob is not loadable.
-    from agent_compose.suspension.checkpoint import CHECKPOINT_VERSION
+    from agent_composer.suspension.checkpoint import CHECKPOINT_VERSION
     assert CHECKPOINT_VERSION == "5.0"
 
 
@@ -371,7 +371,7 @@ def test_checkpoint_carries_expansions_field():
     # RunCheckpoint carries the descriptor tree for runtime-grown subgraphs
     # so a paused run that has already expanded REF/CALL/MAP/AGENT spawners can be
     # restored top-down on resume.
-    from agent_compose.suspension import CallExpansion
+    from agent_composer.suspension import CallExpansion
     cp = RunCheckpoint(
         pool=TypedVariablePool(),
         expansions=[CallExpansion(spawner_id="x", record={}, children=[])],

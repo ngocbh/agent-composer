@@ -8,8 +8,8 @@ one per element (empty `over` -> `[]`).
 
 import importlib
 
-from agent_compose.nodes.base import Enqueue, NodeKind
-from agent_compose.nodes.map import MapNode
+from agent_composer.nodes.base import Enqueue, NodeKind
+from agent_composer.nodes.map import MapNode
 
 
 def test_map_node_kind_value():
@@ -42,4 +42,4 @@ def test_map_node_run_empty_over_is_empty_list():
 
 def test_map_node_kind_exists_and_package_imports():
     assert hasattr(NodeKind, "MAP")
-    importlib.import_module("agent_compose.nodes.map")
+    importlib.import_module("agent_composer.nodes.map")

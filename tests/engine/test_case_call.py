@@ -8,7 +8,7 @@ whole-span `${call}` (a route target is one node id).
 
 import pytest
 
-from agent_compose.compose import LoadError, load_flow, run_flow
+from agent_composer.compose import LoadError, load_flow, run_flow
 
 # An in-file `take` def (the branch callable): echoes its stance via the `took` CODE fn.
 _TAKE_DEF = """

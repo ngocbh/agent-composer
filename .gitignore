@@ -28,4 +28,7 @@ htmlcov/
 .DS_Store
 
 # Runtime transcripts
-.agent_compose/
+.agent_composer/
+
+# MkDocs build output
+site/

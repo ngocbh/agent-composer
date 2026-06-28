@@ -14,9 +14,9 @@ with `status == "failed"`. The four behaviors pinned:
   to failed); all asserts true -> `"succeeded"`.
 """
 
-from agent_compose.events import NodeSucceeded
-from agent_compose.compose import load_flow
-from agent_compose.compose.run import run_flow
+from agent_composer.events import NodeSucceeded
+from agent_composer.compose import load_flow
+from agent_composer.compose.run import run_flow
 
 
 # --------------------------------------------------------------------------- #

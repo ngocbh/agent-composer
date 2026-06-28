@@ -5,18 +5,18 @@ ordering, fan-out, exact-once diamond join, IF_ELSE branch + skip-flood,
 outputs-before-successors, failure, abort, and pause.
 """
 
-from agent_compose.events import (
+from agent_composer.events import (
     RunAborted,
     RunFailed,
     RunPaused,
     RunSucceeded,
 )
-from agent_compose.compile.model import END_ID, START_ID, Edge, CompiledFlow, FlowOutput, NodeState
-from agent_compose.nodes.end import EndNode
-from agent_compose.nodes.start import StartNode
-from agent_compose.runtime.engine import FlowEngine
-from agent_compose.state.pool import TypedVariablePool
-from agent_compose.state.segments import SegmentType, Shape
+from agent_composer.compile.model import END_ID, START_ID, Edge, CompiledFlow, FlowOutput, NodeState
+from agent_composer.nodes.end import EndNode
+from agent_composer.nodes.start import StartNode
+from agent_composer.runtime.engine import FlowEngine
+from agent_composer.state.pool import TypedVariablePool
+from agent_composer.state.segments import SegmentType, Shape
 from tests.engine._fakes import (
     BranchNode,
     FailNode,
@@ -496,7 +496,7 @@ def test_pooled_snapshot_captures_paused_state():
     # single-engine design does not silently break the snapshot path under num_workers>=1. Uses a
     # real HumanInputNode so the structured PauseReason serializes through the checkpoint model
     # (snapshot().pause_reasons is list[PauseReason], not a bare string).
-    from agent_compose.nodes.human_input import HumanInputNode
+    from agent_composer.nodes.human_input import HumanInputNode
 
     eng = FlowEngine(
         _graph([FuncNode("a", lambda p: {}),
@@ -514,10 +514,10 @@ def test_parallel_module_and_export_are_gone():
     # ParallelFlowEngine is deleted; the only pooled path is FlowEngine(num_workers>=1).
     import importlib
 
-    import agent_compose as ac
+    import agent_composer as ac
 
     assert not hasattr(ac, "ParallelFlowEngine")
     import pytest
 
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("agent_compose.runtime.parallel")
+        importlib.import_module("agent_composer.runtime.parallel")

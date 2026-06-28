@@ -11,19 +11,19 @@ from pathlib import Path
 
 import pytest
 
-from agent_compose.compile.model import Edge
-from agent_compose.nodes.if_else import DEFAULT_HANDLE
-from agent_compose.compose.build import build_leaf_node, infer_data_edges
-from agent_compose.compose.cases import desugar_case, reconcile_case_edges
-from agent_compose.compose.errors import LoadError
-from agent_compose.compose.parser import (
+from agent_composer.compile.model import Edge
+from agent_composer.nodes.if_else import DEFAULT_HANDLE
+from agent_composer.compose.build import build_leaf_node, infer_data_edges
+from agent_composer.compose.cases import desugar_case, reconcile_case_edges
+from agent_composer.compose.errors import LoadError
+from agent_composer.compose.parser import (
     AgentDescriptor,
     CaseDescriptor,
     CodeDescriptor,
     parse_nodes,
     parse_file,
 )
-from agent_compose.compose.validate import check_if_else_handles, reject_cycles
+from agent_composer.compose.validate import check_if_else_handles, reject_cycles
 
 _SEEDS = Path(__file__).resolve().parents[2] / "tests" / "seeds"
 

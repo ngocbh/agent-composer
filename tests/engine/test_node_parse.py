@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from agent_compose.compose import LoadError
-from agent_compose.compose.parser import (
+from agent_composer.compose import LoadError
+from agent_composer.compose.parser import (
     AgentDescriptor,
     CallDescriptor,
     CaseDescriptor,

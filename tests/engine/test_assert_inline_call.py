@@ -5,7 +5,7 @@ synth `__call_<n>` node + the assert rewritten to `${<synth>.output} >= 0`; the 
 the flow and the assert (now reading `${X.output}`) is classified post and checked after the run.
 """
 
-from agent_compose.compose import load_flow, run_flow
+from agent_composer.compose import load_flow, run_flow
 
 # An in-file `dbl` def (the assert callee): doubles its int input via the `double` CODE fn.
 _DBL_DEF = """

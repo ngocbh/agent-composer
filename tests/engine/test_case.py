@@ -20,13 +20,13 @@ from pathlib import Path
 
 import pytest
 
-from agent_compose.expr.expressions import evaluate_when_record
-from agent_compose.nodes.if_else import DEFAULT_HANDLE, IfElseNode
-from agent_compose.state.segments import SegmentType, Shape
-from agent_compose.compose.build import build_leaf_node, infer_data_edges
-from agent_compose.compose.cases import desugar_case, reconcile_case_edges
-from agent_compose.compose.errors import LoadError
-from agent_compose.compose.parser import (
+from agent_composer.expr.expressions import evaluate_when_record
+from agent_composer.nodes.if_else import DEFAULT_HANDLE, IfElseNode
+from agent_composer.state.segments import SegmentType, Shape
+from agent_composer.compose.build import build_leaf_node, infer_data_edges
+from agent_composer.compose.cases import desugar_case, reconcile_case_edges
+from agent_composer.compose.errors import LoadError
+from agent_composer.compose.parser import (
     AgentDescriptor,
     CaseDescriptor,
     CodeDescriptor,
@@ -310,7 +310,7 @@ def test_reconcile_replaces_provisional_case_edges():
 def test_on_value_with_double_quote_uses_single_quote_and_routes():
     # an on: match value containing " must compile to a parseable when: (single-quoted,
     # since the grammar has no escape support) and route correctly at eval time.
-    from agent_compose.compose.cases import _quote
+    from agent_composer.compose.cases import _quote
 
     expr = '${__on} == ' + _quote('a"b')
     assert evaluate_when_record(expr, {"__on": 'a"b'}) is True
@@ -320,7 +320,7 @@ def test_on_value_with_double_quote_uses_single_quote_and_routes():
 def test_on_value_with_both_quotes_is_loud_load_error():
     # a value containing BOTH ' and " is unrepresentable in the escape-less grammar
     # -> a loud load error, not a route-time crash.
-    from agent_compose.compose.cases import _quote
+    from agent_composer.compose.cases import _quote
 
     with pytest.raises(LoadError):
         _quote("a'b\"c")

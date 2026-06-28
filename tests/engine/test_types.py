@@ -2,7 +2,7 @@
 
 import pytest
 
-from agent_compose.state.types import ListType, RefType, ScalarType, parse_type
+from agent_composer.state.types import ListType, RefType, ScalarType, parse_type
 
 
 def test_parse_scalars():
@@ -28,14 +28,14 @@ def test_parse_ref():
 
 
 def test_parse_optional():
-    from agent_compose.state.types import OptionalType
+    from agent_composer.state.types import OptionalType
 
     assert parse_type("Optional[str]") == OptionalType(ScalarType("str"))
     assert parse_type("Optional[Rating]") == OptionalType(RefType("Rating"))
 
 
 def test_resolve_optional_is_nullable():
-    from agent_compose.state.types import OptionalType, resolve_shape
+    from agent_composer.state.types import OptionalType, resolve_shape
 
     sh = resolve_shape(OptionalType(ScalarType("str")), {})
     assert sh.seg_type == SegmentType.STRING and sh.nullable is True
@@ -63,7 +63,7 @@ def test_parse_python_scalar_names():
 
 
 def test_parse_python_generics():
-    from agent_compose.state.types import OptionalType
+    from agent_composer.state.types import OptionalType
 
     assert parse_type("list[str]") == ListType(ScalarType("str"))
     assert parse_type("List[int]") == ListType(ScalarType("int"))
@@ -72,7 +72,7 @@ def test_parse_python_generics():
 
 
 def test_parse_literal_quoted_and_unquoted():
-    from agent_compose.state.types import EnumType
+    from agent_composer.state.types import EnumType
 
     assert parse_type("Literal[pro, con, mixed]") == EnumType(("pro", "con", "mixed"))
     assert parse_type('Literal["pro", "con"]') == EnumType(("pro", "con"))
@@ -83,7 +83,7 @@ def test_legacy_engine_names_no_longer_resolve():
     # type unification: the OLD engine vocabulary is gone. A bare `string`/`integer`/
     # `number`/`boolean` is no longer a scalar — it parses as an unknown registry RefType
     # and RAISES SegmentError on resolution.
-    from agent_compose.state.segments import SegmentError as _SE
+    from agent_composer.state.segments import SegmentError as _SE
 
     for legacy in ("string", "integer", "number", "boolean"):
         assert parse_type(legacy) == RefType(legacy)
@@ -96,7 +96,7 @@ def test_legacy_engine_names_no_longer_resolve():
 
 
 def test_parse_union_rejected():
-    from agent_compose.state.segments import SegmentError as _SE
+    from agent_composer.state.segments import SegmentError as _SE
 
     with pytest.raises(_SE) as ei:
         parse_type("Union[int, str]")
@@ -104,7 +104,7 @@ def test_parse_union_rejected():
 
 
 def test_parse_malformed_raises():
-    from agent_compose.state.segments import SegmentError as _SE
+    from agent_composer.state.segments import SegmentError as _SE
 
     with pytest.raises(_SE):
         parse_type("list[")
@@ -113,7 +113,7 @@ def test_parse_malformed_raises():
 
 
 def test_is_shadow_guard():
-    from agent_compose.state.types import _is_shadow
+    from agent_composer.state.types import _is_shadow
 
     assert _is_shadow("str") and _is_shadow("int") and _is_shadow("Optional")
     assert _is_shadow("Literal") and _is_shadow("Any") and _is_shadow("list")
@@ -123,14 +123,14 @@ def test_is_shadow_guard():
 
 # --- registry + resolve_shape ----------------------------------------------- #
 
-from agent_compose.state.segments import (  # noqa: E402
+from agent_composer.state.segments import (  # noqa: E402
     ListObjectSegment,
     ObjectSegment,
     SegmentError,
     SegmentType,
     build_segment_with_type,
 )
-from agent_compose.state.types import (  # noqa: E402
+from agent_composer.state.types import (  # noqa: E402
     RecordDef,
     VariantDef,
     resolve_shape,  # noqa: F401
@@ -152,7 +152,7 @@ def test_resolve_scalar_and_list():
 
 
 def test_resolve_inline_literal_is_enum():
-    from agent_compose.state.types import EnumType, resolve_shape
+    from agent_composer.state.types import EnumType, resolve_shape
 
     sh = resolve_shape(EnumType(("pro", "con")), {})
     assert sh.seg_type == SegmentType.STRING and sh.tags == frozenset({"pro", "con"})
@@ -206,7 +206,7 @@ def test_end_to_end_write_boundary():
 
 
 def test_public_exports():
-    import agent_compose.state as state
+    import agent_composer.state as state
 
     for name in (
         "Shape",

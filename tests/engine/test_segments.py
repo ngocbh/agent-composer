@@ -8,7 +8,7 @@ Feature -> contract:
 
 import pytest
 
-from agent_compose.state.segments import (
+from agent_composer.state.segments import (
     ANY_SEGMENT_ADAPTER,
     BooleanSegment,
     FileRef,
@@ -126,7 +126,7 @@ def test_file_segment_round_trip():
 
 
 def test_date_segment_build_and_roundtrip():
-    from agent_compose.state.segments import DateSegment
+    from agent_composer.state.segments import DateSegment
 
     seg = build_segment_with_type(SegmentType.DATE, "2026-06-08")
     assert isinstance(seg, DateSegment)
@@ -151,7 +151,7 @@ def test_plain_string_not_inferred_as_date():
 
 
 def test_datetime_segment_build_and_roundtrip():
-    from agent_compose.state.segments import DateTimeSegment
+    from agent_composer.state.segments import DateTimeSegment
 
     seg = build_segment_with_type(SegmentType.DATETIME, "2026-06-12T14:30:00+00:00")
     assert isinstance(seg, DateTimeSegment)
@@ -186,7 +186,7 @@ def test_plain_string_not_inferred_as_datetime():
 
 
 def test_shape_back_compat_segmenttype_still_accepted():
-    from agent_compose.state.segments import Shape
+    from agent_composer.state.segments import Shape
 
     assert isinstance(build_segment_with_type(Shape.scalar(SegmentType.STRING), "x"), StringSegment)
     # passing a bare SegmentType still works (back-compat)
@@ -194,7 +194,7 @@ def test_shape_back_compat_segmenttype_still_accepted():
 
 
 def test_shape_variant_membership():
-    from agent_compose.state.segments import Shape
+    from agent_composer.state.segments import Shape
 
     action = Shape(seg_type=SegmentType.STRING, tags=frozenset({"Approve", "Reject", "Defer"}))
     assert build_segment_with_type(action, "Approve").value == "Approve"
@@ -203,7 +203,7 @@ def test_shape_variant_membership():
 
 
 def test_shape_record_fields():
-    from agent_compose.state.segments import Shape
+    from agent_composer.state.segments import Shape
 
     rating = Shape(
         seg_type=SegmentType.OBJECT,
@@ -223,7 +223,7 @@ def test_shape_record_fields():
 
 
 def test_shape_nullable_field_accepts_none_and_absent():
-    from agent_compose.state.segments import Shape
+    from agent_composer.state.segments import Shape
 
     sig = Shape(
         seg_type=SegmentType.OBJECT,
@@ -245,7 +245,7 @@ def test_shape_nullable_field_accepts_none_and_absent():
 
 
 def test_shape_list_of_record():
-    from agent_compose.state.segments import ListObjectSegment, Shape
+    from agent_composer.state.segments import ListObjectSegment, Shape
 
     rating = Shape(
         seg_type=SegmentType.OBJECT,

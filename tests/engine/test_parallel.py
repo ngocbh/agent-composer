@@ -8,12 +8,12 @@ Two things to prove:
 
 import time
 
-from agent_compose.events import RunFailed, RunPaused, RunSucceeded
-from agent_compose.compile.model import END_ID, START_ID, Edge, CompiledFlow, NodeState, FlowOutput
-from agent_compose.nodes.end import EndNode
-from agent_compose.nodes.start import StartNode
-from agent_compose.runtime.engine import FlowEngine
-from agent_compose.state.pool import TypedVariablePool
+from agent_composer.events import RunFailed, RunPaused, RunSucceeded
+from agent_composer.compile.model import END_ID, START_ID, Edge, CompiledFlow, NodeState, FlowOutput
+from agent_composer.nodes.end import EndNode
+from agent_composer.nodes.start import StartNode
+from agent_composer.runtime.engine import FlowEngine
+from agent_composer.state.pool import TypedVariablePool
 from tests.engine._fakes import (
     BranchNode,
     FailNode,

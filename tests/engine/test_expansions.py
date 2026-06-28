@@ -8,7 +8,7 @@ types themselves round-trip cleanly and the discriminator is load-bearing.
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from agent_compose.suspension.expansions import (
+from agent_composer.suspension.expansions import (
     AgentExpansion,
     AgentSegment,
     CallExpansion,
@@ -97,7 +97,7 @@ def test_call_expansion_record_round_trip_preserves_primitives() -> None:
 
 def test_top_level_reexports() -> None:
     """Expansion descriptor types re-exported from the suspension package."""
-    from agent_compose.suspension import (
+    from agent_composer.suspension import (
         AgentExpansion,
         AgentSegment,
         CallExpansion,

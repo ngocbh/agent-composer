@@ -2,10 +2,10 @@
 
 import pytest
 
-from agent_compose.state.segments import SegmentType
-from agent_compose.state.types import read_typedefs
-from agent_compose.compose import LoadError
-from agent_compose.compose.shapes import read_shape
+from agent_composer.state.segments import SegmentType
+from agent_composer.state.types import read_typedefs
+from agent_composer.compose import LoadError
+from agent_composer.compose.shapes import read_shape
 
 
 def test_scalar():

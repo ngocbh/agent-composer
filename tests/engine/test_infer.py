@@ -12,9 +12,9 @@ input name). An `${input.X}` read mints a `START_ID->reader` input-producer DATA
 
 from pathlib import Path
 
-from agent_compose.compile.model import END_ID, START_ID
-from agent_compose.compose.build import build_leaf_node, infer_data_edges
-from agent_compose.compose.parser import (
+from agent_composer.compile.model import END_ID, START_ID
+from agent_composer.compose.build import build_leaf_node, infer_data_edges
+from agent_composer.compose.parser import (
     AgentDescriptor,
     CaseDescriptor,
     CodeDescriptor,

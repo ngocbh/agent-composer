@@ -1,7 +1,7 @@
-from agent_compose.compile.model import END_ID, START_ID
-from agent_compose.nodes.end import EndNode
-from agent_compose.nodes.start import StartNode
-from agent_compose.state.pool import TypedVariablePool
+from agent_composer.compile.model import END_ID, START_ID
+from agent_composer.nodes.end import EndNode
+from agent_composer.nodes.start import StartNode
+from agent_composer.state.pool import TypedVariablePool
 
 
 def test_start_end_ids_are_owned_by_the_node_classes():
@@ -18,8 +18,8 @@ def test_pool_start_id_default_mirrors_startnode_id():
 
 
 def test_compiledflow_start_end_id_accessors():
-    from agent_compose.compile.model import CompiledFlow, Edge, FlowOutput
-    from agent_compose.nodes.code.node import CodeNode
+    from agent_composer.compile.model import CompiledFlow, Edge, FlowOutput
+    from agent_composer.nodes.code.node import CodeNode
 
     n = CodeNode("a", ref="tests.engine._compose_codefns:echo")
     flow = CompiledFlow.from_parts({"a": n}, [Edge("s", START_ID, "a"), Edge("t", "a", END_ID)])

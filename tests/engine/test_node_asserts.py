@@ -6,7 +6,7 @@ Runtime: per-node enforcement in `Node.run` (pre before `_run`, post after) — 
 
 import pytest
 
-from agent_compose.compose import LoadError, load_flow, run_flow
+from agent_composer.compose import LoadError, load_flow, run_flow
 
 
 def _flow(asserts: list[str], *, input_decl="n: ${input.v}", outputs="int") -> str:

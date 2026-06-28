@@ -11,10 +11,10 @@ import importlib
 
 import pytest
 
-from agent_compose.events import NodeFailed, NodeSucceeded
-from agent_compose.nodes.base import NodeKind
-from agent_compose.nodes.end import EndNode
-from agent_compose.state.pool import TypedVariablePool
+from agent_composer.events import NodeFailed, NodeSucceeded
+from agent_composer.nodes.base import NodeKind
+from agent_composer.nodes.end import EndNode
+from agent_composer.state.pool import TypedVariablePool
 from tests.engine._fakes import drive, stamp_reads
 
 
@@ -25,9 +25,9 @@ def test_node_kind_has_no_output_resolver_or_collector():
 
 def test_output_resolver_and_collector_packages_are_gone():
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("agent_compose.nodes.output_resolver")
+        importlib.import_module("agent_composer.nodes.output_resolver")
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("agent_compose.nodes.collector")
+        importlib.import_module("agent_composer.nodes.collector")
 
 
 def test_child_end_pool_scoped_post_assert_fires_through_the_rekeyed_end_branch():

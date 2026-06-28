@@ -2,8 +2,8 @@
 
 import pytest
 
-from agent_compose.compose.errors import LoadError
-from agent_compose.compose.loader import load_flow
+from agent_composer.compose.errors import LoadError
+from agent_composer.compose.loader import load_flow
 
 _CODE = "tests.seeds.fns:one_line_summary"
 
@@ -189,7 +189,7 @@ def test_diamond_reuse(tmp_path):
 
 from pathlib import Path
 
-from agent_compose.compose.run import run_flow
+from agent_composer.compose.run import run_flow
 
 _SEEDS = Path(__file__).resolve().parents[1].parent / "tests" / "seeds"
 

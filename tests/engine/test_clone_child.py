@@ -1,12 +1,12 @@
-from agent_compose.compile.expand import clone_child, ClonedSubgraph
-from agent_compose.compile.model import CompiledFlow, Edge, FlowOutput, START_ID, END_ID
-from agent_compose.compose.asserts import AssertSet
-from agent_compose.compose.shapes import InputDecl, read_shape
-from agent_compose.events import NodeFailed, NodeSucceeded
-from agent_compose.nodes.base import NodeKind, Output
-from agent_compose.nodes.end import EndNode
-from agent_compose.nodes.start import StartNode
-from agent_compose.state.pool import TypedVariablePool
+from agent_composer.compile.expand import clone_child, ClonedSubgraph
+from agent_composer.compile.model import CompiledFlow, Edge, FlowOutput, START_ID, END_ID
+from agent_composer.compose.asserts import AssertSet
+from agent_composer.compose.shapes import InputDecl, read_shape
+from agent_composer.events import NodeFailed, NodeSucceeded
+from agent_composer.nodes.base import NodeKind, Output
+from agent_composer.nodes.end import EndNode
+from agent_composer.nodes.start import StartNode
+from agent_composer.state.pool import TypedVariablePool
 from tests.engine._fakes import FuncNode, drive, stamp_reads, derive_wiring
 
 

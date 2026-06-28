@@ -6,7 +6,7 @@ declared defaults for omitted args), drive the baked child engine, and re-export
 child's single value. These drive real CODE-only children through `run_flow` (no LLM).
 """
 
-from agent_compose.compose import LoadError, load_flow, run_flow
+from agent_composer.compose import LoadError, load_flow, run_flow
 
 # A CODE-only child: topic -> {report, n}.
 _CHILD = """
@@ -193,8 +193,8 @@ def test_ref_boundary_assert_sees_coerced_present_value():
 def test_ref_run_expands_not_child_engine():
     # the CallNode no longer drives a child FlowEngine; its run() returns an Enqueue (the
     # engine clones the child and grows the live graph). No `*, system` cap anymore.
-    from agent_compose.nodes.base import Enqueue
-    from agent_compose.nodes.call import CallNode
+    from agent_composer.nodes.base import Enqueue
+    from agent_composer.nodes.call import CallNode
 
     n = CallNode("r", flow_id="c", child=object(), child_inputs=[])   # REF — call once
     out = n.run({"topic": "ACME"})          # no *, system cap anymore

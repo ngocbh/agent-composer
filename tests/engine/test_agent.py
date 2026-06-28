@@ -12,16 +12,16 @@ run lands; AGENT-mode compile-time validation moved with the v0 compiler.)
 import pytest
 from langchain_core.messages import AIMessage
 
-import agent_compose.llm_clients as llm_clients_mod
-import agent_compose.tools as tools_mod
-from agent_compose.compile.model import END_ID, START_ID, CompiledFlow, Edge, FlowOutput
-from agent_compose.nodes.end import EndNode
-from agent_compose.nodes.start import StartNode
-from agent_compose.events import NodeFailed, RunSucceeded
-from agent_compose.nodes.agent import AgentNode
-from agent_compose.runtime.engine import FlowEngine
-from agent_compose.state.pool import TypedVariablePool
-from agent_compose.llm_clients import LLMConfig
+import agent_composer.llm_clients as llm_clients_mod
+import agent_composer.tools as tools_mod
+from agent_composer.compile.model import END_ID, START_ID, CompiledFlow, Edge, FlowOutput
+from agent_composer.nodes.end import EndNode
+from agent_composer.nodes.start import StartNode
+from agent_composer.events import NodeFailed, RunSucceeded
+from agent_composer.nodes.agent import AgentNode
+from agent_composer.runtime.engine import FlowEngine
+from agent_composer.state.pool import TypedVariablePool
+from agent_composer.llm_clients import LLMConfig
 
 
 class _FakeChat:
@@ -70,7 +70,7 @@ def _run_node(node, pool=None):
     """Drive the node's contract like the engine does (via the `eval_node` seam) and
     return the TERMINAL event — `NodeSucceeded` on a final answer, `NodeFailed` if the
     node raised (e.g. the iteration cap, converted at the boundary)."""
-    from agent_compose.runtime.eval_node import eval_node
+    from agent_composer.runtime.eval_node import eval_node
 
     return list(eval_node(node, None, pool or TypedVariablePool()))[-1]
 
@@ -130,9 +130,9 @@ def test_ask_user_in_memory_continuation_round_trip(monkeypatch):
     # paused-checkpoint resume of an agent is deferred.
     from types import SimpleNamespace
 
-    from agent_compose.events import RunPaused, RunResumed
-    from agent_compose.compose.run import resume_command
-    from agent_compose.suspension.pause import HumanInputRequired
+    from agent_composer.events import RunPaused, RunResumed
+    from agent_composer.compose.run import resume_command
+    from agent_composer.suspension.pause import HumanInputRequired
 
     chat = _FakeChat([
         _ai_tool_call("ask_user", {"question": "Approve the action?"}, call_id="q1"),

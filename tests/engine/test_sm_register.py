@@ -1,5 +1,5 @@
-from agent_compose.compile.model import CompiledFlow, Edge, NodeState, START_ID, END_ID
-from agent_compose.runtime.state_manager import StateManager
+from agent_composer.compile.model import CompiledFlow, Edge, NodeState, START_ID, END_ID
+from agent_composer.runtime.state_manager import StateManager
 from tests.engine._fakes import FuncNode
 
 

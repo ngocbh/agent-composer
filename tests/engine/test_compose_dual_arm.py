@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from agent_compose.compose.errors import LoadError
-from agent_compose.compose.parser import parse_file
+from agent_composer.compose.errors import LoadError
+from agent_composer.compose.parser import parse_file
 
 
 def _new_only() -> str:

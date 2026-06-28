@@ -20,11 +20,11 @@ from pathlib import Path
 
 import pytest
 
-from agent_compose.nodes.call import CallNode   # nodes/call/__init__.py
-from agent_compose.nodes.map import MapNode
-from agent_compose.state.segments import SegmentType
-from agent_compose.compose import LoadedFlow, LoadError, load_flow
-from agent_compose.compose.build import ChildSignature, child_signature
+from agent_composer.nodes.call import CallNode   # nodes/call/__init__.py
+from agent_composer.nodes.map import MapNode
+from agent_composer.state.segments import SegmentType
+from agent_composer.compose import LoadedFlow, LoadError, load_flow
+from agent_composer.compose.build import ChildSignature, child_signature
 
 _SEEDS = Path(__file__).resolve().parents[2] / "tests" / "seeds"
 

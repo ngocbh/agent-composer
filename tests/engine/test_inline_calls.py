@@ -14,7 +14,7 @@ pure sugar, no new runtime kind. Two layers:
 
 import pytest
 
-from agent_compose.expr import ExpressionError, InlineCall, desugar_calls
+from agent_composer.expr import ExpressionError, InlineCall, desugar_calls
 
 
 # --------------------------------------------------------------------------- #
@@ -138,7 +138,7 @@ def test_call_in_arg_coalesce_position():
 # CODE-only children (Ollama-free), resolver-free via in-file `defs:`.
 # --------------------------------------------------------------------------- #
 
-from agent_compose.compose import LoadError, load_flow, run_flow  # noqa: E402
+from agent_composer.compose import LoadError, load_flow, run_flow  # noqa: E402
 
 # An in-file `enrich` def that echoes its `topic` — the callee for the inline calls.
 _ENRICH_DEF = """
@@ -455,8 +455,8 @@ def test_inline_call_seed_21_loads():
 # ids, unknown callee, e06 over a synth binding).
 # --------------------------------------------------------------------------- #
 
-from agent_compose.compose import desugar_inline_calls  # noqa: E402
-from agent_compose.compose.parser import ToolDescriptor  # noqa: E402
+from agent_composer.compose import desugar_inline_calls  # noqa: E402
+from agent_composer.compose.parser import ToolDescriptor  # noqa: E402
 
 
 def test_quoted_interpolated_arg_strips_quotes_like_named_form():

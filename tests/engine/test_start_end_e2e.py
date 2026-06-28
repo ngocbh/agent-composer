@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from agent_compose.compile.model import END_ID, START_ID
-from agent_compose.compose import load_flow, run_flow
-from agent_compose.nodes.base import NodeKind
+from agent_composer.compile.model import END_ID, START_ID
+from agent_composer.compose import load_flow, run_flow
+from agent_composer.nodes.base import NodeKind
 
 _REPO = Path(__file__).resolve().parents[2]
 _SEEDS = _REPO / "tests" / "seeds"
@@ -85,14 +85,14 @@ def test_retired_node_modules_are_gone():
     import importlib
 
     for mod in (
-        "agent_compose.nodes.ref",
-        "agent_compose.nodes.output_resolver",
-        "agent_compose.nodes.collector",
+        "agent_composer.nodes.ref",
+        "agent_composer.nodes.output_resolver",
+        "agent_composer.nodes.collector",
     ):
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module(mod)
     # MAP is re-split back into its own package (no longer retired).
-    importlib.import_module("agent_compose.nodes.map")
+    importlib.import_module("agent_composer.nodes.map")
 
 
 # --- (3) ${input.X} resolves via START_ID (a defaulted input fills end-to-end) - #
@@ -183,7 +183,7 @@ def _live_identifier_refs(path: Path) -> set[str]:
 
 def test_engine_source_has_no_live_reference_to_retired_constructs():
     offenders: dict[str, set[str]] = {}
-    for py in (_REPO / "src" / "agent_compose").rglob("*.py"):
+    for py in (_REPO / "src" / "agent_composer").rglob("*.py"):
         refs = _live_identifier_refs(py)
         if refs:
             offenders[str(py.relative_to(_REPO))] = refs

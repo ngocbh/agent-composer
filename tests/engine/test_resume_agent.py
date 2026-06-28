@@ -9,8 +9,8 @@ entry — the memo is replayed as messages, not re-invoked). No scratch.
 
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage, messages_to_dict
 
-from agent_compose.nodes.agent.node import AgentNode, Resume
-from agent_compose.nodes.base import NodeKind, Output
+from agent_composer.nodes.agent.node import AgentNode, Resume
+from agent_composer.nodes.base import NodeKind, Output
 
 
 class _Chat:
@@ -36,7 +36,7 @@ def _memo():
 
 
 def test_resume_entry_appends_answer_and_finishes(monkeypatch):
-    import agent_compose.llm_clients as llm
+    import agent_composer.llm_clients as llm
     chat = _Chat([AIMessage(content="FINAL")])
     monkeypatch.setattr(llm, "model_from_config", lambda cfg: chat)
     node = AgentNode("agent",

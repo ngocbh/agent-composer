@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from agent_compose.cli import app
+from agent_composer.cli import app
 
 runner = CliRunner()
 

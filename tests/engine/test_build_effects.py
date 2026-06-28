@@ -1,7 +1,7 @@
-from agent_compose.compose.build import build_leaf_node
-from agent_compose.compose.parser import HumanInputDescriptor, WaitDescriptor
-from agent_compose.nodes.human_input import HumanInputNode
-from agent_compose.nodes.wait import WaitNode
+from agent_composer.compose.build import build_leaf_node
+from agent_composer.compose.parser import HumanInputDescriptor, WaitDescriptor
+from agent_composer.nodes.human_input import HumanInputNode
+from agent_composer.nodes.wait import WaitNode
 
 
 def test_build_human_input_node():
@@ -24,8 +24,8 @@ def test_build_wait_node():
 
 def test_wait_until_outputs_ref_makes_data_edge():
     # a wait whose `until` reads ${X.output} must order after X
-    from agent_compose.compose.parser import WaitDescriptor, CodeDescriptor
-    from agent_compose.compose.build import build_leaf_node, infer_data_edges
+    from agent_composer.compose.parser import WaitDescriptor, CodeDescriptor
+    from agent_composer.compose.build import build_leaf_node, infer_data_edges
     descs = {
         "clock": CodeDescriptor(id="clock", code="m:f", outputs="datetime"),
         "settle": WaitDescriptor(id="settle", until="${clock.output}"),

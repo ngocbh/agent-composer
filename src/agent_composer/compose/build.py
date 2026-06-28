@@ -1,0 +1,768 @@
+"""Build leaf runtime `Node`s from node descriptors.
+
+The analogue of `compiler._build_node` + `_declared_inputs` + `_io_binding`,
+working from the parsed `NodeDescriptor`s (flat keyed-map bodies) instead of the
+legacy `FlowNode`/`IOField`. For each LEAF kind (agent/code/model/tool) it:
+
+- instantiates the matching runtime `Node` per-kind (mirroring `_build_node`'s
+  ctor args), with `node_name` -> the Node `title`;
+- stamps `output_shape = read_shape(descriptor.outputs, registry)` (the source
+  reader), or `None` when the descriptor declares no `outputs:`;
+- stamps `params` (the node-side signature, names only) from the descriptor's `inputs:`
+  map (a TOOL's `args:`) and returns the flow-owned `wiring` (`param -> source`) — the
+  split: the node holds no source, the flow owns it (the type travels with it).
+
+CASE desugar, REF/MAP build happen elsewhere — only leaf kinds here.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from typing import Any, Callable, Optional
+
+from agent_composer.compile.model import END_ID, START_ID, Edge, FlowOutput
+from agent_composer.compile.validation import shapes_compatible
+from agent_composer.expr import (
+    ExpressionError,
+    binding_co_skips,
+    binding_refs,
+    parse_binding,
+)
+from agent_composer.nodes.agent import AgentNode
+from agent_composer.nodes.base import Node, NodeKind
+from agent_composer.nodes.binding import ParamDecl
+from agent_composer.nodes.call import CallNode
+from agent_composer.nodes.code import CodeNode
+from agent_composer.nodes.map import MapNode
+from agent_composer.nodes.end import EndNode
+from agent_composer.nodes.human_input import HumanInputNode
+from agent_composer.nodes.model import ModelNode
+from agent_composer.nodes.start import StartNode
+from agent_composer.nodes.tool import ToolNode
+from agent_composer.nodes.wait import WaitNode
+from agent_composer.llm_clients import LLMConfig
+from agent_composer.state.segments import SegmentType, Shape
+from agent_composer.state.types import TypeRegistry
+from agent_composer.compose.errors import LoadError
+from agent_composer.compose.parser import (
+    AgentDescriptor,
+    CallDescriptor,
+    CaseDescriptor,
+    CodeDescriptor,
+    HumanInputDescriptor,
+    ModelDescriptor,
+    NodeDescriptor,
+    ToolDescriptor,
+    WaitDescriptor,
+)
+from agent_composer.compose.shapes import InputDecl, read_shape
+
+# A list-shape helper: the LIST_OBJECT/LIST_* seg for an element Shape (mirrors
+# `state.types._LIST_SEG_FOR_ELEMENT` + the list-of-record / list-of-variant rule in
+# `resolve_shape`, applied to a precomputed element Shape rather than a Type).
+_LIST_SEG_FOR_ELEMENT: dict[SegmentType, SegmentType] = {
+    SegmentType.STRING: SegmentType.LIST_STRING,
+    SegmentType.INTEGER: SegmentType.LIST_INTEGER,
+    SegmentType.NUMBER: SegmentType.LIST_NUMBER,
+    SegmentType.BOOLEAN: SegmentType.LIST_BOOLEAN,
+    SegmentType.OBJECT: SegmentType.LIST_OBJECT,
+}
+
+
+def _output_shape(outputs: Any, registry: TypeRegistry) -> Optional[Shape]:
+    """A descriptor's declared `outputs:` as one `Shape`; `None` when absent."""
+    if outputs is None:
+        return None
+    return read_shape(outputs, registry)
+
+
+def _field_schema(name: str, shape: Shape, required: bool) -> dict[str, Any]:
+    entry: dict[str, Any] = {"name": name, "type": shape.seg_type.value, "required": required}
+    if shape.tags:  # a Literal[...] enum -> the allowed values
+        entry["enum"] = sorted(shape.tags)
+    elif shape.element is not None and shape.element.tags:  # list[Literal[...]] -> element enum
+        entry["enum"] = sorted(shape.element.tags)
+    if shape.seg_type == SegmentType.OBJECT and shape.fields:  # nested record -> sub-fields
+        req = shape.required or frozenset()
+        entry["fields"] = [_field_schema(k, f, k in req) for k, f in shape.fields.items()]
+    return entry
+
+
+def _answer_schema(shape: Optional[Shape]) -> list[dict[str, Any]]:
+    """A light IOField-shaped schema for a HUMAN_INPUT answer, from its output `Shape`.
+
+    A record output -> one entry per field (recursively); any other (scalar / enum / list,
+    incl. list-of-enum) -> a single `answer` entry. Lets a host renderer prompt against the
+    expected answer type, and the pause reason self-describe."""
+    if shape is None:
+        return []
+    if shape.seg_type == SegmentType.OBJECT and shape.fields:
+        required = shape.required or frozenset()
+        return [_field_schema(k, f, k in required) for k, f in shape.fields.items()]
+    return [_field_schema("answer", shape, not shape.nullable)]
+
+
+def _sink_params(mapping: dict[str, Any]) -> list[ParamDecl]:
+    """A descriptor's `inputs:`/`args:` map -> untyped `ParamDecl`s (the node-side signature).
+
+    The split: `params` carries only the declared NAMES (no source); the flow owns the
+    sources in `CompiledFlow.wiring`. Untyped (`type`/`shape` None) — the source carries the
+    type; derived from the SAME map as `_sink_wiring` so names and keys are in lockstep."""
+    return [ParamDecl(name=k) for k in (mapping or {})]
+
+
+def _sink_wiring(mapping: dict[str, Any]) -> dict[str, Any]:
+    """A descriptor's `inputs:`/`args:` map -> the flow-owned wiring (`param -> source`).
+    The source half of the split; the same dict `_sink_params` reads the names from."""
+    return dict(mapping or {})
+
+
+def _validate_llm_config(cfg: dict[str, Any] | None, node_id: str) -> dict[str, Any]:
+    """Validate a raw llm_config dict at LOAD time.
+
+    Round-trips through `LLMConfig(**cfg)` to fire `extra="forbid"`-style rejection on
+    typo'd keys (e.g. `temparature`). Returns the original dict (the engine's interior
+    carrier is dict) — only the validation matters. Raises `LoadError` (not
+    pydantic ValidationError) so the surface speaks one error type.
+    """
+    if not cfg:
+        return cfg or {}
+    try:
+        LLMConfig(**cfg)
+    except Exception as exc:
+        raise LoadError(f"node {node_id!r}: llm_config: {exc}") from exc
+    return cfg
+
+
+def build_leaf_node(
+    desc: NodeDescriptor,
+    registry: TypeRegistry,
+) -> tuple[Node, dict[str, Any]]:
+    """Build one leaf runtime `Node` (agent/code/model/tool/human_input/wait) + its WIRING.
+
+    Returns `(node, wiring)` where `wiring` is the flow-owned `{param -> source}` map (the
+    split: the node carries only `params`, the flow owns the sources in
+    `CompiledFlow.wiring`). A timed WAIT's reserved `until` source rides the wiring under the
+    `"until"` key; an event WAIT's wiring is `{}`. `registry` is the flow's
+    `read_typedefs(...)` map. A MODEL node builds with no serving seam (removed as dead).
+    """
+    if isinstance(desc, AgentDescriptor):
+        try:
+            node: Node = AgentNode(
+                desc.id,
+                prompt=desc.prompt or "",
+                tools=list(desc.tools),
+                controls=list(desc.controls),
+                # desc.llm_config is a plain dict; carry it through. AgentNode.llm_config
+                # stores dict[str, Any] | None; model_from_config accepts dict|LLMConfig.
+                # The extra="forbid" on LLMConfig catches typo'd keys at LOAD via
+                # _validate_llm_config below.
+                llm_config=_validate_llm_config(desc.llm_config, desc.id),
+                mode=desc.mode,
+                title=desc.node_name,
+            )
+        except ValueError as exc:
+            # AgentNode validates mode/controls against the registries; surface a
+            # rejection as the loader's one error type (loud), not a bare ValueError.
+            raise LoadError(f"node {desc.id!r}: {exc}") from exc
+    elif isinstance(desc, CodeDescriptor):
+        node = CodeNode(desc.id, ref=desc.code, title=desc.node_name)
+    elif isinstance(desc, ModelDescriptor):
+        node = ModelNode(
+            desc.id,
+            model_id=desc.model_id,
+            weights_uri=desc.weights_uri,
+            runtime=desc.runtime,
+            title=desc.node_name,
+        )
+    elif isinstance(desc, ToolDescriptor):
+        node = ToolNode(desc.id, tool_id=desc.tool_id, title=desc.node_name)
+    elif isinstance(desc, HumanInputDescriptor):
+        node = HumanInputNode(desc.id, prompt=desc.prompt or "", title=desc.node_name)
+    elif isinstance(desc, WaitDescriptor):
+        node = WaitNode(desc.id, is_timed=desc.until is not None, title=desc.node_name)
+    else:
+        raise LoadError(
+            f"node {desc.id!r}: kind {type(desc).__name__} is not a leaf node "
+            f"(case nodes are desugared; ref/map nodes expand at runtime)"
+        )
+
+    # Stamp the node-side `params` (signature) + the flow-owned wiring (the source), derived
+    # from the same descriptor map (key parity). A timed WAIT's `until` source rides the
+    # reserved wiring key (no author params); an event WAIT's wiring is `{}`.
+    if isinstance(desc, ToolDescriptor):
+        node.params = _sink_params(desc.args)
+        wiring = _sink_wiring(desc.args)
+    elif isinstance(desc, WaitDescriptor):
+        node.params = []
+        wiring = {"until": desc.until} if desc.until is not None else {}
+    else:
+        node.output_shape = _output_shape(desc.outputs, registry)
+        node.params = _sink_params(desc.inputs)
+        wiring = _sink_wiring(desc.inputs)
+        if isinstance(node, HumanInputNode):
+            node.answer_schema = _answer_schema(node.output_shape)
+    return node, wiring
+
+
+# --------------------------------------------------------------------------- #
+# Data-edge inference
+#
+# The analogue of scope/dependency analysis: a sink binding that reads a free
+# variable `${<id>.output[.…]}` depends on the producing node `<id>`, so we emit a
+# data `Edge(from_=<id>, to=<consumer>, input_group=<sink key>)`. `binding_refs`
+# already flattens a coalesce `${a | b}` to BOTH ref paths, so the two alternatives
+# of one sink share that sink's `input_group` (per-input readiness). Refs whose
+# head is not `outputs` (`inputs`/`system`/`item`) are NOT data edges.
+#
+# Root/terminal `__start__`/`__end__` synthesis is a later pass (it must run after the
+# `case` control edges): this pass emits ONLY real-node data edges.
+# --------------------------------------------------------------------------- #
+
+
+def _outputs_producer(path: str) -> Optional[str]:
+    """The producing node id of a `${<id>.output[.…]}` whole-string ref, else None
+    (other head). Only the singular node-first spelling is recognized; legacy
+    `${outputs.<id>}` is rejected at parse time."""
+    parts = path.split(".")
+    if len(parts) >= 2 and parts[1] == "output":
+        return parts[0]
+    return None
+
+
+def _ref_producer(path: str) -> Optional[str]:
+    """The producer node id of a `${...}` reference head (singular):
+    - `<id>.output[.…]`: produce from node `<id>`.
+    - `input.<key>`: produce from the synthesized START_ID, so an `${input.X}`
+      reader gets a `START_ID->reader` data edge.
+    - `system.<key>` is run-global and produces NO edge; `item` is MAP-body-local.
+    Legacy plural heads (`outputs`/`inputs`) are rejected at parse time."""
+    parts = path.split(".")
+    if len(parts) >= 2 and parts[0] == "input":
+        return START_ID
+    if len(parts) >= 2 and parts[1] == "output":
+        return parts[0]
+    return None
+
+
+def _binding_producers(value: Any) -> list[str]:
+    """The producer node ids a binding/expression value reads (in source order).
+
+    `value` may be a `${...}` binding string, a `when:`/`on:` expression template,
+    or a non-string literal (no refs). Coalesce alternatives flatten to several
+    producers — the caller assigns them ALL the one sink `input_group`. An `inputs.X` ref
+    produces from START_ID (the input-reader data edge); `system.X` produces nothing.
+    """
+    if not isinstance(value, str):
+        return []
+    try:
+        segments = parse_binding(value)
+    except ExpressionError:
+        return []  # malformed refs surface in the ref-wiring pass, located
+    producers: list[str] = []
+    for ref in binding_refs(segments):
+        producer = _ref_producer(ref)
+        if producer is not None:
+            producers.append(producer)
+    return producers
+
+
+def infer_data_edges(
+    descriptors: dict[str, NodeDescriptor],
+    flow_wiring: dict[str, dict[str, Any]],
+) -> list[Edge]:
+    """Infer the flow's data edges from the flow-owned wiring + descriptors (no sentinels).
+
+    For each consuming node, scan its sources and emit a data `Edge` per `${<id>.output[.…]}`
+    ref, tagged with the `input_group` that identifies WHICH sink it feeds (the param/arg name
+    for a leaf/REF input; `over` for a MAP's `over:`; `until` for a timed WAIT; a provisional
+    `<case>:<n>` key for a `case` `on:`/`when:` ref). A coalesce sink's alternatives share one
+    group. Edges are the **projection of `flow.wiring`** for leaf + WAIT + REF/MAP;
+    CASE sources are still read off `descriptors`.
+
+    `flow_wiring[node_id]` is the `{param -> source}` map (a timed WAIT carries its `until`, a
+    MAP its `over`, under the reserved keys). `descriptors` supplies the CASE `on:`/`when:` refs
+    (a `case` desugars to an `IfElseNode`, which reconciles these provisional groups
+    to its `__rN`/`__on` names).
+    """
+    edges: list[Edge] = []
+    counts: dict[tuple[str, str], int] = {}  # (from, to) -> next edge index
+
+    def emit(producer: str, consumer: str, group: str, optional: bool) -> None:
+        i = counts.get((producer, consumer), 0)
+        counts[(producer, consumer)] = i + 1
+        edges.append(
+            Edge(
+                id=f"{producer}->{consumer}#{i}",
+                from_=producer,
+                to=consumer,
+                input_group=group,
+                optional=optional,
+            )
+        )
+
+    def emit_for(value: Any, consumer: str, group: str) -> None:
+        # the whole group's co-skip stance is a property of its binding.
+        optional = not binding_co_skips(value)
+        for producer in _binding_producers(value):
+            emit(producer, consumer, group, optional)
+
+    for node_id, desc in descriptors.items():
+        if isinstance(desc, CaseDescriptor):
+            # case has no built node (the IfElseNode is built later). Its data refs
+            # live in `on:` + each `when:`. Provisional per-ref groups (`<case>:<n>`)
+            # — the case desugar reconciles to `__on`/`__rN`. The edge EXISTENCE is the
+            # invariant this pass must satisfy (so `score -> gate` is inferred).
+            ref_index = 0
+            sources = [desc.on] if desc.on is not None else []
+            sources += [c.get("when") for c in desc.cases]
+            for src in sources:
+                for producer in _binding_producers(src):
+                    # provisional case edges (reconciliation drops them); optional
+                    # is recomputed there from the desugared __rN/__on binding.
+                    emit(producer, node_id, f"{node_id}:{ref_index}", False)
+                    ref_index += 1
+            continue
+
+        if isinstance(desc, WaitDescriptor):
+            # A timed `wait` orders after any node its `until:` reads. The `until` SOURCE is
+            # relocated to the flow wiring (reserved key); an event WAIT has no `until`
+            # key. `${input.X}`/`${system.X}` yield no edge.
+            wiring = flow_wiring.get(node_id, {})
+            if "until" in wiring:
+                emit_for(wiring["until"], node_id, "until")
+            continue
+
+        # leaf + REF/MAP: sources are the flow-owned wiring. A MAP's
+        # reserved `over` source rides the `"over"` key (over-then-inputs order); `${item}` is
+        # body-local and yields no edge. CASE/WAIT were handled above.
+        for param, src in flow_wiring.get(node_id, {}).items():
+            emit_for(src, node_id, param)
+
+    return edges
+
+
+# --------------------------------------------------------------------------- #
+# DAG assembly: root/`__start__` + terminal/`__end__` over ALL edges
+#
+# Runs AFTER both the data edges and the `case` control edges are
+# reconciled — so a `case` branch target carrying only a `gate -> target` control
+# edge is correctly demoted from root. A root is a node with NO incoming edge of ANY
+# kind (data OR control); the engine seeds every root unconditionally, so a wrongly-
+# marked root makes BOTH branches of a `case` run. The flow `outputs:` bindings give
+# the terminals: each `${P.output[...]}` producer gets a `P -> __end__` edge (a
+# coalesce flow-output -> one terminal edge per producer; only the taken branch's
+# value survives, resolved by `terminal_output`).
+# --------------------------------------------------------------------------- #
+
+
+def synthesize_roots(node_ids: "set[str]", edges: list[Edge]) -> list[Edge]:
+    """`START_ID -> root` edges for body nodes with no incoming edge of ANY kind.
+
+    `edges` must be the FULL reconciled edge set (data + control + END_ID producer); a node
+    demoted by a control edge (a `case` branch target) or an END_ID producer is therefore
+    excluded from the roots. The START_ID/END_ID boundary nodes are never roots
+    here (END_ID gets its own bare-root edge in `synthesize_boundary` when 0-output).
+    """
+    has_incoming = {e.to for e in edges}
+    roots = sorted(nid for nid in node_ids if nid not in has_incoming)
+    return [Edge(id=f"{START_ID}->{nid}", from_=START_ID, to=nid) for nid in roots]
+
+
+def synthesize_boundary_graph(
+    input_decls: list,
+    outputs: list[FlowOutput],
+    node_ids: "set[str]",
+    body_edges: list[Edge],
+) -> tuple[dict[str, Node], list[Edge], dict[str, dict[str, Any]]]:
+    """Synthesize the `START_ID`/`END_ID` boundary nodes + their edges + wiring.
+
+    Every flow becomes `START_ID -> body -> END_ID` with ORDINARY edges (the `__start__`/`__end__`
+    sentinels are retired — the strings persist only as the reserved node ids). Returns:
+
+    - `boundary_nodes`: `{START_ID: StartNode, END_ID: EndNode(record)}`.
+    - `edges`: the END_ID producer edges (one per producer per declared output, `input_group`
+      = the output name, `optional = not binding_co_skips` so a coalesce/`:-`/`:?` output
+      never co-skips) + the START_ID root edges (a bare
+      `START_ID->nid` for every body node with no incoming of any kind, over the FULL set
+      incl. the END_ID producer edges) + a bare `START_ID->END_ID` root edge for a 0-output END_ID
+      (so the 0-output END_ID runs and commits `None`).
+    - `boundary_wiring`: parity-clean wiring for both — `START_ID` keyed by input name
+      (provisional `${input.X}` source so `check_wiring_parity` passes; the engine seeds
+      START_ID's record directly at runtime), `END_ID` keyed by output name -> the output's `from_`.
+
+    The START_ID-side `${input.X}`-producer DATA edges + the demote-input-reader-from-root
+    rule live here too (every input read resolves through the START_ID namespace).
+    """
+    start = StartNode(START_ID, input_decls=list(input_decls))
+    end = EndNode.record(END_ID, output_names=[o.name for o in outputs])
+    boundary_nodes: dict[str, Node] = {START_ID: start, END_ID: end}
+
+    # END_ID producer edges — one per producer per output, keyed by the output NAME, with the
+    # coalesce/optional stance (reuses the infer_data_edges emit_for convention).
+    end_edges: list[Edge] = []
+    counts: dict[tuple[str, str], int] = {}
+    for o in outputs:
+        optional = not binding_co_skips(o.from_)
+        for producer in _binding_producers(o.from_):
+            i = counts.get((producer, END_ID), 0)
+            counts[(producer, END_ID)] = i + 1
+            end_edges.append(Edge(id=f"{producer}->{END_ID}#{i}", from_=producer, to=END_ID,
+                                  input_group=o.name, optional=optional))
+
+    # START_ID root edges over the FULL set (body + END_ID producer edges): a body node with no
+    # incoming of any kind is a bare root. A 0-output END_ID (no producer edge) is itself a root.
+    full = body_edges + end_edges
+    has_incoming = {e.to for e in full}
+    root_edges = [Edge(id=f"{START_ID}->{nid}", from_=START_ID, to=nid)
+                  for nid in sorted(node_ids) if nid not in has_incoming]
+    if END_ID not in has_incoming:
+        root_edges.append(Edge(id=f"{START_ID}->{END_ID}", from_=START_ID, to=END_ID))
+
+    boundary_wiring: dict[str, dict[str, Any]] = {
+        # START_ID wiring: input names -> `${input.X}` sources. Provisional in the wiring
+        # table (parity check) — at runtime the engine seeds store[START_ID] directly
+        # from the run-args record (START_ID is never scheduled as a regular node).
+        START_ID: {d.name: f"${{input.{d.name}}}" for d in input_decls},
+        END_ID: {o.name: o.from_ for o in outputs},
+    }
+    return boundary_nodes, end_edges + root_edges, boundary_wiring
+
+
+def infer_ordering_edges(
+    descriptors: dict[str, NodeDescriptor],
+    node_ids: "set[str]",
+    node_lines: Optional[dict[str, int]] = None,
+) -> list[Edge]:
+    """Run-ordering edges from `depends_on:` (co-skip) and `runs_after:` (pure order).
+
+    An ordering edge carries no data (`ordering=True`); it gates the dependent on the
+    source SETTLING. `depends_on` co-skips (source SKIPPED -> dependent dies, `optional=
+    False`); `runs_after` does not (`optional=True`). An unknown target is a located
+    `LoadError`; cycle rejection is the caller's (the edges join the `reject_cycles` set).
+    Distinct `~>` ids keep an ordering edge from colliding with a data edge on the same pair.
+    """
+    node_lines = node_lines or {}
+    edges: list[Edge] = []
+    counts: dict[tuple[str, str], int] = {}
+    for node_id, desc in descriptors.items():
+        for key, sources, optional in (
+            ("depends_on", desc.depends_on, False),
+            ("runs_after", desc.runs_after, True),
+        ):
+            for src in sources:
+                if src not in node_ids:
+                    raise LoadError(
+                        f"node {node_id!r}: `{key}` references unknown node {src!r}",
+                        line=node_lines.get(node_id),
+                    )
+                i = counts.get((src, node_id), 0)
+                counts[(src, node_id)] = i + 1
+                edges.append(
+                    Edge(
+                        id=f"{src}~>{node_id}#{i}",
+                        from_=src,
+                        to=node_id,
+                        ordering=True,
+                        optional=optional,
+                    )
+                )
+    return edges
+
+
+# --------------------------------------------------------------------------- #
+# `call` build + child resolve-and-bake.
+#
+# A `call` node names a CALLABLE (a defs: entry or an external flow). The child resolver
+# is the load-time seam: `(flow_id, version) -> LoadedFlow` (the loader composes the
+# defs-first resolution). From the child the loader derives its `ChildSignature` —
+# declared input shapes + single codomain `Shape` — to stamp the node's `output_shape` (a
+# plain call re-exports the codomain; a mapped call wraps it in `list[U]`) and to
+# name/arity- + type-check (e06) the bindings, AND bakes the child's compiled flow + input
+# decls onto the node so the built `CallNode` `run` drives the embedded child
+# (resolve-and-bake — the call graph, incl. nested flows, is fixed at compile).
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class ChildSignature:
+    """A child flow's compile-time SIGNATURE: declared input decls + the single
+    codomain `Shape` (the value the child returns; `None` when it declares no outputs).
+
+    `inputs` are the child's `read_flow_inputs(...)` `InputDecl`s (the name/arity check
+    reads their names + `.required`/`.default`). `output` is the child's single value:
+    one declared output -> that output's Shape; >=2 -> a closed-record Shape keyed by
+    name (the same arity rule `terminal_output` assembles: one value out)."""
+
+    inputs: list[InputDecl]
+    output: Optional[Shape]
+
+
+# resolver(flow_id, flow_version) -> LoadedFlow (the load-time child seam; duck-typed
+# on `.compiled`/`.inputs` so `build` need not import `loader`). `flow_version` is an
+# opaque str tag (a `uses:` ref's `@<version>`); the in-file/legacy path passes None.
+ChildResolver = Callable[[str, Optional[str]], Any]
+
+
+def _output_value_shape(
+    from_: Any, producers: dict[str, Shape], flow_input_shapes: dict[str, Shape]
+) -> Optional[Shape]:
+    """Resolve ONE flow-output binding `from_` to the Shape of the value it carries.
+
+    Singular only: `${<id>.output[.…]}` for a node value, `${input.<name>}`
+    for a flow input. A coalesce / literal / embedded ref / opaque producer / `${system.X}`
+    -> None (lenient, codomain stays opaque). Legacy plural heads were retired."""
+    if not isinstance(from_, str):
+        return None
+    try:
+        refs = binding_refs(parse_binding(from_))
+    except ExpressionError:
+        return None
+    if len(refs) != 1:
+        return None  # coalesce / no ref -> not a single typed value
+    parts = refs[0].split(".")
+    head = parts[0]
+    if head == "input" and len(parts) == 2:
+        return flow_input_shapes.get(parts[1])
+    # Node-first `<id>.output[.…]`.
+    if len(parts) >= 2 and parts[1] == "output":
+        producer_id = parts[0]
+        fields = parts[2:]
+    else:
+        return None  # ${system.X}/literal/other -> not a typed codomain value
+    shape = producers.get(producer_id)
+    for field in fields:
+        if shape is None or shape.fields is None:
+            return None  # opaque producer / not a checked record -> lenient
+        shape = shape.fields.get(field)
+    return shape
+
+
+def child_signature(loaded: Any) -> ChildSignature:
+    """A loaded child `LoadedFlow` -> its compile-time `ChildSignature`.
+
+    Duck-typed on `loaded.input` (the `InputDecl`s) + `loaded.compiled` (`.nodes`/`.outputs`)
+    so `build` need not import `loader` (which imports `build`). The codomain `Shape`
+    follows `terminal_output`'s arity rule over the flow outputs: one output -> its value
+    Shape; >=2 -> a closed record keyed by name (every output is a field; an output whose
+    value Shape can't be resolved is present but opaque)."""
+    producers: dict[str, Shape] = {
+        nid: node.output_shape
+        for nid, node in loaded.compiled.nodes.items()
+        if node.output_shape is not None
+    }
+    flow_input_shapes = {d.name: d.shape for d in loaded.input}
+    outs = list(loaded.compiled.outputs)
+    if not outs:
+        output: Optional[Shape] = None
+    elif len(outs) == 1:
+        output = _output_value_shape(outs[0].from_, producers, flow_input_shapes)
+    else:
+        fields = {
+            o.name: _output_value_shape(o.from_, producers, flow_input_shapes)
+            for o in outs
+        }
+        # Every declared output is a record field (a closed record keyed by name); an
+        # output whose value Shape didn't resolve is kept but opaque (its `fields=None`
+        # leaves a deeper dotted walk lenient) and is NOT in `required`.
+        output = Shape(
+            seg_type=SegmentType.OBJECT,
+            fields={
+                k: (v if v is not None else Shape.scalar(SegmentType.NONE))
+                for k, v in fields.items()
+            },
+            required=frozenset(k for k, v in fields.items() if v is not None),
+        )
+    return ChildSignature(inputs=list(loaded.input), output=output)
+
+
+def _list_of(element: Shape) -> Shape:
+    """`element` -> a `list[element]` Shape (the MAP codomain). Mirrors `resolve_shape`'s
+    list-seg rule: a record/variant element -> LIST_OBJECT/LIST_STRING; else by scalar."""
+    if element.tags is not None:
+        list_seg = SegmentType.LIST_STRING
+    elif element.fields is not None:
+        list_seg = SegmentType.LIST_OBJECT
+    else:
+        list_seg = _LIST_SEG_FOR_ELEMENT.get(element.seg_type, SegmentType.LIST_ANY)
+    return Shape(seg_type=list_seg, element=element)
+
+
+def _check_child_bindings(
+    node_id: str,
+    flow_id: str,
+    params: list[ParamDecl],
+    sig: ChildSignature,
+    errors: list[str],
+) -> None:
+    """Name/arity check a `call` node's PARAMS against the child SIGNATURE (the analogue of
+    `compile.validation._check_ref_bindings`'s name + required-input checks, read off the
+    signature). Reads the node-side `params` (the split); the deep cross-flow TYPE
+    check (e06) is `check_ref_map_types`, a loader post-build pass over the flow wiring."""
+    declared = {d.name for d in sig.inputs}
+    bound = set()
+    for p in params:
+        bound.add(p.name)
+        if p.name not in declared:
+            errors.append(
+                f"call node {node_id!r}: binding {p.name!r} is not a declared "
+                f"input of callable {flow_id!r}"
+            )
+    for decl in sig.inputs:
+        if decl.required and decl.name not in bound and decl.default is None:
+            errors.append(
+                f"call node {node_id!r}: required callable input {decl.name!r} is unbound"
+            )
+
+
+def build_call_node(desc: CallDescriptor, resolver: ChildResolver) -> tuple[Node, dict[str, Any]]:
+    """Build a `call`/`map` node — REF's `CallNode` (single application) or MAP's `MapNode`
+    (`kind: map` + `over:`, mapped iteration) — resolve-and-bake.
+
+    Returns `(node, wiring)` (the split): the node carries `params` + the transitional
+    `inputs`; the flow owns the sources in `wiring`. A MAP's reserved `over:` iteration source
+    rides the wiring under the `"over"` key (over-then-inputs order); a REF's wiring is just
+    its `inputs:`. Resolves the callable via `resolver`, derives its `ChildSignature`, stamps
+    `output_shape` (REF re-exports the codomain; MAP wraps it in `list[U]`), name/arity-checks the
+    params, and BAKES the child's compiled flow onto the node. The REF/MAP discriminator is
+    `desc.kind` (`"map"` -> `MapNode`, else `CallNode`)."""
+    is_map = desc.kind == "map"
+    if is_map and "over" in (desc.inputs or {}):
+        # Reserved-name guard: a MAP's `over` is the iteration source, carried under
+        # the reserved wiring key — an `inputs:` param named `over` would collide.
+        raise LoadError(
+            f"map node {desc.id!r}: input name 'over' is reserved (the iteration "
+            f"source); rename the `inputs:` entry"
+        )
+    child = _resolve_child(desc.id, desc.call, resolver)
+    sig = child_signature(child)
+    # Stamp the child's AssertSet onto its compiled flow: the Enqueue target is `child.compiled`,
+    # and `expand.clone_child` reads `child_asserts` off the cloned child to carry the
+    # boundary asserts (eval'd eagerly in _apply_enqueue) + re-home the post asserts onto __out.
+    child.compiled.child_asserts = child.asserts
+    errors: list[str] = []
+    if is_map:
+        node: Node = MapNode(
+            desc.id,
+            flow_id=desc.call,
+            flow_version=None,
+            child=child.compiled,
+            child_inputs=child.input,
+            child_asserts=child.asserts,
+            parallel=desc.parallel,           # inert; carried for the over case only
+            title=desc.node_name,
+        )
+        node.params = _sink_params(desc.inputs)
+        wiring = {"over": desc.over, **_sink_wiring(desc.inputs)}   # over FIRST (edge order)
+        if sig.output is None:
+            errors.append(
+                f"map node {desc.id!r}: callable {desc.call!r} must declare exactly one "
+                f"output value — a mapped call (over:) returns list[U] of that single output"
+            )
+        else:
+            node.output_shape = _list_of(sig.output)
+    else:
+        node = CallNode(
+            desc.id,
+            flow_id=desc.call,
+            flow_version=None,
+            child=child.compiled,
+            child_inputs=child.input,
+            child_asserts=child.asserts,
+            title=desc.node_name,
+        )
+        node.params = _sink_params(desc.inputs)
+        wiring = _sink_wiring(desc.inputs)
+        node.output_shape = sig.output         # re-export the child's single codomain value
+    _check_child_bindings(desc.id, desc.call, node.params, sig, errors)
+    if errors:
+        raise LoadError("\n  ".join(errors))
+    return node, wiring
+
+
+def check_ref_map_types(
+    nodes: dict,
+    producers: dict[str, Shape],
+    flow_input_shapes: dict[str, Shape],
+    flow_wiring: dict[str, dict[str, Any]],
+    node_lines: Optional[dict] = None,
+) -> None:
+    """e06 — cross-flow type check for every `call` binding (a loader post-build pass).
+
+    Each binding's SOURCE `Shape` (resolved from its `${<id>.output}`/`${input.X}` ref over
+    the PARENT producers + flow-input shapes — read from the flow-owned `wiring`) must be
+    structurally compatible with the CHILD input's declared `Shape` (`shapes_compatible`,
+    C-EQUIV). A `${item}`/coalesce/literal/opaque source — or an opaque/absent child input
+    (incl. the reserved `over` key) — stays lenient (skipped). Loud + located at the
+    node's `.yaml` line. Iterates the WIRING (not the params) so a mis-named binding still
+    surfaces here when its child decl is absent rather than being silently skipped."""
+    for nid, node in nodes.items():
+        if node.kind not in (NodeKind.CALL, NodeKind.MAP):
+            continue
+        child_decls = {d.name: d for d in node.child_inputs}
+        for param, src in flow_wiring.get(nid, {}).items():
+            decl = child_decls.get(param)
+            if decl is None or decl.shape is None:
+                continue  # `over`/name-caught-in-build/opaque child input -> lenient
+            source = _output_value_shape(src, producers, flow_input_shapes)
+            if source is None:
+                continue  # ${item}/coalesce/literal/opaque source -> lenient
+            # A nullable source is fine for a non-nullable child input ONLY when the
+            # binding GUARANTEES a non-null value — a non-null literal escape or a `:?`
+            # required (both fire on null, present-null included). A ref-default `:-${y}`
+            # may itself be null, and the child's own `default:` does NOT cover it: a
+            # present-null source SHADOWS the child default (apply_defaults fills only
+            # OMITTED inputs, never a bound null). `not binding_co_skips` is exactly that
+            # non-null guarantee (a `|` coalesce of refs stays strict).
+            if (
+                source.nullable
+                and not decl.shape.nullable
+                and not binding_co_skips(src)
+            ):
+                source = replace(source, nullable=False)
+            if not shapes_compatible(source, decl.shape):
+                raise LoadError(
+                    f"call node {nid!r}: binding {param!r} — child expects "
+                    f"{decl.shape.seg_type.value!r}, source is {source.seg_type.value!r}",
+                    line=(node_lines or {}).get(nid),
+                )
+
+
+def check_wiring_parity(
+    nodes: dict, flow_wiring: dict[str, dict[str, Any]], node_lines: Optional[dict] = None
+) -> None:
+    """Load-time key parity: every node's `flow.wiring` keys must equal its declared
+    `params` names PLUS the kind's reserved keys (`until` for a timed WAIT, `over` for a mapped
+    `call`).
+
+    Closes the duplicate-param hole by construction (a nested-dict wiring cannot hold a duplicate
+    param) and turns an orphan source (a wiring key with no param), a missing source (a param with no
+    wiring), or a node absent from `flow.wiring` entirely (silent {} bind -> lost input) into a
+    located `LoadError`. Engine bind-time reserved keys (the mapped-call `over` / WAIT `until` the
+    eval_node seam pre-resolves) are never author wiring and do not appear here."""
+    lines = node_lines or {}
+    for nid, node in nodes.items():
+        expected = {p.name for p in (node.params or [])}
+        if node.kind == NodeKind.WAIT and getattr(node, "is_timed", False):
+            expected |= {"until"}
+        elif node.kind == NodeKind.MAP:
+            expected |= {"over"}
+        actual = set(flow_wiring.get(nid, {}))
+        if actual != expected:
+            raise LoadError(
+                f"node {nid!r}: flow.wiring keys {sorted(actual)} != declared params + reserved "
+                f"{sorted(expected)} (wiring/params key parity, T6c)",
+                line=lines.get(nid),
+            )
+
+
+def _resolve_child(node_id: str, flow_id: str, resolver: ChildResolver) -> Any:
+    """Resolve a callable to its `LoadedFlow` via the resolver, loud on failure."""
+    try:
+        return resolver(flow_id, None)
+    except LoadError:
+        raise
+    except Exception as exc:  # any resolver failure -> the callable is unknown
+        raise LoadError(
+            f"call node {node_id!r}: could not resolve callable {flow_id!r}: {exc}"
+        ) from exc

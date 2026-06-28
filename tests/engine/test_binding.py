@@ -12,9 +12,9 @@ from collections import namedtuple
 
 import pytest
 
-from agent_compose.compile.model import START_ID
-from agent_compose.nodes.binding import BindingError, ParamDecl, bind_params
-from agent_compose.state.pool import TypedVariablePool
+from agent_composer.compile.model import START_ID
+from agent_composer.nodes.binding import BindingError, ParamDecl, bind_params
+from agent_composer.state.pool import TypedVariablePool
 
 # Test-local sink: a legacy InputBinding-shaped (name, type, source, required, default) spec.
 _Sink = namedtuple("_Sink", "name type source required default", defaults=(None, None, False, None))

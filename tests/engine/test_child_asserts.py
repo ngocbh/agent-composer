@@ -9,7 +9,7 @@ parent run fails.
 
 import pytest
 
-from agent_compose.compose import LoadError, load_flow, run_flow
+from agent_composer.compose import LoadError, load_flow, run_flow
 
 # `checked` def: doubles its int input; boundary asserts n>=0, post asserts the output < 100.
 _CHECKED_DEF = """
@@ -111,10 +111,10 @@ def test_map_child_assert_one_violating_element_fails():
 # to `eng.expansions` only AFTER `_grow_*` succeeds, so a boundary-assert raise inside the
 # helper leaves the ledger clean (no orphan that a later snapshot could serialize). Driven via
 # FlowEngine directly to inspect `eng.expansions` (run_flow only exposes `.engine` on a pause).
-from agent_compose.compile.model import START_ID
-from agent_compose.events import RunFailed
-from agent_compose.runtime.engine import FlowEngine
-from agent_compose.state.pool import TypedVariablePool
+from agent_composer.compile.model import START_ID
+from agent_composer.events import RunFailed
+from agent_composer.runtime.engine import FlowEngine
+from agent_composer.state.pool import TypedVariablePool
 
 
 @pytest.mark.parametrize("num_workers", [0, 4])

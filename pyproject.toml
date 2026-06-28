@@ -48,13 +48,15 @@ dev = [
     "pytest>=8.0",
     "build>=1.2",
 ]
+docs = ["mkdocs-material>=9.5"]
 
 [project.scripts]
-ac = "agent_compose.cli:main"
+ac = "agent_composer.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/ngocbh/agent-composer"
 Repository = "https://github.com/ngocbh/agent-composer"
+Documentation = "https://agent-composer.readthedocs.io"
 
 [tool.setuptools.packages.find]
 where = ["src"]

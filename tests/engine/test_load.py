@@ -17,13 +17,13 @@ from pathlib import Path
 
 import pytest
 
-from agent_compose.compile.model import END_ID, START_ID, CompiledFlow
-from agent_compose.nodes.agent import AgentNode
-from agent_compose.nodes.code import CodeNode
-from agent_compose.nodes.if_else import IfElseNode
-from agent_compose.nodes.model import ModelNode
-from agent_compose.state.segments import SegmentType
-from agent_compose.compose import LoadedFlow, LoadError, load_flow
+from agent_composer.compile.model import END_ID, START_ID, CompiledFlow
+from agent_composer.nodes.agent import AgentNode
+from agent_composer.nodes.code import CodeNode
+from agent_composer.nodes.if_else import IfElseNode
+from agent_composer.nodes.model import ModelNode
+from agent_composer.state.segments import SegmentType
+from agent_composer.compose import LoadedFlow, LoadError, load_flow
 
 _SEEDS = Path(__file__).resolve().parents[2] / "tests" / "seeds"
 
@@ -282,7 +282,7 @@ def test_depends_on_seed_emits_ordering_edge():
 
 
 def test_loaded_flow_carries_version():
-    from agent_compose import load_flow
+    from agent_composer import load_flow
     lf = load_flow(
         'id: x\nname: x\nversion: v2\nnodes:\n  a: {kind: code, code: m:f}\n'
         'output: {r: "${a.output}"}\n'
@@ -291,7 +291,7 @@ def test_loaded_flow_carries_version():
 
 
 def test_loaded_flow_version_none_when_absent():
-    from agent_compose import load_flow
+    from agent_composer import load_flow
     lf = load_flow(
         'id: x\nname: x\nnodes:\n  a: {kind: code, code: m:f}\n'
         'output: {r: "${a.output}"}\n'

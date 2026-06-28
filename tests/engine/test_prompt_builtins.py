@@ -13,9 +13,9 @@ The feature is prompt-only: it mints no graph node or edge (see agent-compose-pr
 
 import pytest
 
-from agent_compose.compose import LoadError, load_flow
-from agent_compose.expr import ExpressionError, prompt_refs, render_template_record
-from agent_compose.expr.builtins import register_template_fn
+from agent_composer.compose import LoadError, load_flow
+from agent_composer.expr import ExpressionError, prompt_refs, render_template_record
+from agent_composer.expr.builtins import register_template_fn
 
 _REC = {"briefs": ["ab", "adf"], "name": "zeta", "sig": {"value": 0.8}}
 

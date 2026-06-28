@@ -10,8 +10,8 @@ from __future__ import annotations
 import importlib
 import pytest
 
-from agent_compose.compose import load_flow, run_flow
-from agent_compose.compose.errors import LoadError
+from agent_composer.compose import load_flow, run_flow
+from agent_composer.compose.errors import LoadError
 
 
 # --------------------------------------------------------------------------- #
@@ -46,7 +46,7 @@ output:
 # pool.resolve node-id arm + singular input arm
 def test_resolver_node_first_ref() -> None:
     """`${<node>.output.k}` resolves to `store[<node>][k]` — the new node-first head."""
-    from agent_compose.state.pool import TypedVariablePool
+    from agent_composer.state.pool import TypedVariablePool
 
     pool = TypedVariablePool()
     pool.set("score", {"rating": 0.7, "rationale": "ok"})
@@ -58,7 +58,7 @@ def test_resolver_node_first_ref() -> None:
 
 def test_resolver_singular_input() -> None:
     """`${input.k}` resolves to `store[start_id][k]` — singular spelling, alias of `inputs`."""
-    from agent_compose.state.pool import TypedVariablePool
+    from agent_composer.state.pool import TypedVariablePool
 
     pool = TypedVariablePool(start_id="__start__")
     pool.set("__start__", {"topic": "META", "window": 30})
@@ -70,7 +70,7 @@ def test_resolver_singular_input() -> None:
 def test_namespace_ref_node_first() -> None:
     """Child-cloning rewrites internal `${<X>.output}` and `${input.k}` to namespaced
     node-first references."""
-    from agent_compose.compile.expand import _rens_internal
+    from agent_composer.compile.expand import _rens_internal
 
     # ${<X>.output} (singular) → namespaced node-first
     assert _rens_internal("${foo.output}", callsite="each#0") == "${each#0/foo.output}"
@@ -210,7 +210,7 @@ def test_all_test_fixtures_use_new_shape() -> None:
 # `_POOL_HEADS` is singular
 def test_pool_heads_singular() -> None:
     """`_POOL_HEADS = {input, system, item}` (no plural); a node-local assert reading `${inputs.X}` raises."""
-    from agent_compose.compose.validate import _POOL_HEADS
+    from agent_composer.compose.validate import _POOL_HEADS
 
     assert _POOL_HEADS == frozenset({"input", "system", "item"})
     # `inputs`/`outputs` are NOT in the pool-head set; they would be caught by the typo hint.
@@ -232,11 +232,11 @@ def test_end_post_assert_reads_output() -> None:
     output. After the fix: `${output}` reads through the injected `{"output": end_value}`
     record so the comparison evaluates correctly.
     """
-    from agent_compose.compile.model import CompiledFlow, END_ID, START_ID, Edge
-    from agent_compose.nodes.end import EndNode
-    from agent_compose.nodes.start import StartNode
-    from agent_compose.runtime.engine import FlowEngine
-    from agent_compose.state.pool import TypedVariablePool
+    from agent_composer.compile.model import CompiledFlow, END_ID, START_ID, Edge
+    from agent_composer.nodes.end import EndNode
+    from agent_composer.nodes.start import StartNode
+    from agent_composer.runtime.engine import FlowEngine
+    from agent_composer.state.pool import TypedVariablePool
     from tests.engine._fakes import FuncNode, derive_wiring
 
     def _make_flow(post_assert: str) -> CompiledFlow:
@@ -275,8 +275,8 @@ def test_end_post_assert_reads_output() -> None:
 # LoadedFlow/RunResult carry .input
 def test_python_carriers_singular() -> None:
     """All Python carriers expose `.input` (singular); `.inputs` no longer exists."""
-    from agent_compose.compose.loader import LoadedFlow
-    from agent_compose.compose.run import RunResult
+    from agent_composer.compose.loader import LoadedFlow
+    from agent_composer.compose.run import RunResult
 
     assert "input" in LoadedFlow.__dataclass_fields__
     assert "inputs" not in LoadedFlow.__dataclass_fields__
@@ -291,21 +291,21 @@ def test_python_carriers_singular() -> None:
 
 
 def test_no_spec_or_common_package() -> None:
-    """Neither `agent_compose.spec` nor `agent_compose.common` exists.
+    """Neither `agent_composer.spec` nor `agent_composer.common` exists.
     The boundary ids live on the node classes (StartNode.ID/EndNode.ID,
     re-exported by compile.model); LLMConfig lives with the llm clients."""
-    for gone in ("agent_compose.spec", "agent_compose.common"):
+    for gone in ("agent_composer.spec", "agent_composer.common"):
         with pytest.raises(ImportError):
             importlib.import_module(gone)
 
-    from agent_compose.compile.model import END_ID, START_ID
-    from agent_compose.llm_clients import LLMConfig
-    from agent_compose.nodes.end import EndNode
-    from agent_compose.nodes.start import StartNode
+    from agent_composer.compile.model import END_ID, START_ID
+    from agent_composer.llm_clients import LLMConfig
+    from agent_composer.nodes.end import EndNode
+    from agent_composer.nodes.start import StartNode
 
     assert START_ID == StartNode.ID == "__start__"
     assert END_ID == EndNode.ID == "__end__"
-    assert LLMConfig.__module__ == "agent_compose.llm_clients.config"
+    assert LLMConfig.__module__ == "agent_composer.llm_clients.config"
 
 
 # --------------------------------------------------------------------------- #
@@ -316,7 +316,7 @@ def test_no_spec_or_common_package() -> None:
 # AgentNode.llm_config carries a plain dict end-to-end
 def test_llm_config_dict_carrier() -> None:
     """`AgentNode.llm_config` is a plain dict (or None), not an `LLMConfig` instance."""
-    from agent_compose.nodes.agent.node import AgentNode
+    from agent_composer.nodes.agent.node import AgentNode
 
     src = """
 id: f

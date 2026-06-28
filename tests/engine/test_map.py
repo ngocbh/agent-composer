@@ -8,8 +8,8 @@ CODE-only children via `run_flow`.
 
 import pytest
 
-from agent_compose.compile.model import START_ID
-from agent_compose.compose import LoadError, load_flow, run_flow
+from agent_composer.compile.model import START_ID
+from agent_composer.compose import LoadError, load_flow, run_flow
 
 # topic -> the topic (echo), so MAP results == the over list.
 _ECHO_CHILD = """
@@ -146,8 +146,8 @@ def test_map_over_with_coalesce_resolves_at_run():
 
 # --- MapNode.run -> list[Enqueue]; the END_ID(list-mode) aggregator joins in over order - #
 def test_map_run_returns_list_of_enqueue():
-    from agent_compose.nodes.base import Enqueue
-    from agent_compose.nodes.map import MapNode
+    from agent_composer.nodes.base import Enqueue
+    from agent_composer.nodes.map import MapNode
 
     n = MapNode("m", flow_id="c", child=object(), child_inputs=[])
     out = n.run({"over": ["A", "B"]}, bind_item=lambda el: {"topic": el})  # no system cap
@@ -156,7 +156,7 @@ def test_map_run_returns_list_of_enqueue():
 
 
 def test_map_empty_over_returns_empty_enqueue_list():
-    from agent_compose.nodes.map import MapNode
+    from agent_composer.nodes.map import MapNode
 
     n = MapNode("m", flow_id="c", child=object(), child_inputs=[])
     assert n.run({"over": []}, bind_item=lambda el: {}) == []
@@ -164,8 +164,8 @@ def test_map_empty_over_returns_empty_enqueue_list():
 
 @pytest.mark.parametrize("num_workers", [0, 4])
 def test_map_parallel_via_num_workers_preserves_order(num_workers):
-    from agent_compose.runtime.engine import FlowEngine
-    from agent_compose.state.pool import TypedVariablePool
+    from agent_composer.runtime.engine import FlowEngine
+    from agent_composer.state.pool import TypedVariablePool
 
     flow = load_flow(_map_flow("echo-one", parallel=False),
                      child_resolver=_resolver(**{"echo-one": _ECHO_CHILD}))
@@ -177,8 +177,8 @@ def test_map_parallel_via_num_workers_preserves_order(num_workers):
 
 @pytest.mark.parametrize("num_workers", [0, 4])
 def test_map_n_zero_synthesizes_end_list_emitting_empty(num_workers):
-    from agent_compose.runtime.engine import FlowEngine
-    from agent_compose.state.pool import TypedVariablePool
+    from agent_composer.runtime.engine import FlowEngine
+    from agent_composer.state.pool import TypedVariablePool
 
     flow = load_flow(_map_flow("echo-one", parallel=False),
                      child_resolver=_resolver(**{"echo-one": _ECHO_CHILD}))
@@ -192,9 +192,9 @@ def test_map_n_zero_synthesizes_end_list_emitting_empty(num_workers):
 def test_map_synthesizes_one_end_list_node(num_workers):
     # the MAP fan-in is ONE EndNode.list_ aggregator (replacing COLLECTOR): N=2 inputs e0/e1
     # wired to each element's child END_ID, aliased to the spawner.
-    from agent_compose.nodes.base import NodeKind
-    from agent_compose.runtime.engine import FlowEngine
-    from agent_compose.state.pool import TypedVariablePool
+    from agent_composer.nodes.base import NodeKind
+    from agent_composer.runtime.engine import FlowEngine
+    from agent_composer.state.pool import TypedVariablePool
 
     flow = load_flow(_map_flow("echo-one", parallel=False),
                      child_resolver=_resolver(**{"echo-one": _ECHO_CHILD}))

@@ -21,20 +21,20 @@ from pathlib import Path
 
 import pytest
 
-from agent_compose.nodes.agent import AgentNode
-from agent_compose.state.segments import SegmentType, Shape
-from agent_compose.compose.build import build_leaf_node, infer_data_edges
-from agent_compose.compose.cases import desugar_case, reconcile_case_edges
-from agent_compose.compose.errors import LoadError
-from agent_compose.compose.parser import (
+from agent_composer.nodes.agent import AgentNode
+from agent_composer.state.segments import SegmentType, Shape
+from agent_composer.compose.build import build_leaf_node, infer_data_edges
+from agent_composer.compose.cases import desugar_case, reconcile_case_edges
+from agent_composer.compose.errors import LoadError
+from agent_composer.compose.parser import (
     AgentDescriptor,
     CaseDescriptor,
     CodeDescriptor,
     parse_nodes,
     parse_file,
 )
-from agent_compose.compose.shapes import read_flow_inputs
-from agent_compose.compose.validate import validate_references
+from agent_composer.compose.shapes import read_flow_inputs
+from agent_composer.compose.validate import validate_references
 from tests.engine._fakes import derive_wiring, stamp_reads
 
 _SEEDS = Path(__file__).resolve().parents[2] / "tests" / "seeds"

@@ -9,14 +9,14 @@ these direct-drive tests supply them via the `_fakes` helpers (`stamp_reads`/`dr
 AgentLoopError -> NodeFailed) by `test_agent.py`.
 """
 
-from agent_compose.compile.model import END_ID, START_ID, CompiledFlow, Edge
-from agent_compose.events import NodeFailed, NodeStarted, NodeSucceeded, PauseRequested, RunFailed
-from agent_compose.nodes.base import Enqueue, Node, NodeKind, Output
-from agent_compose.nodes.binding import ParamDecl
-from agent_compose.nodes.call import CallNode
-from agent_compose.nodes.map import MapNode
-from agent_compose.runtime.engine import FlowEngine
-from agent_compose.state.pool import TypedVariablePool
+from agent_composer.compile.model import END_ID, START_ID, CompiledFlow, Edge
+from agent_composer.events import NodeFailed, NodeStarted, NodeSucceeded, PauseRequested, RunFailed
+from agent_composer.nodes.base import Enqueue, Node, NodeKind, Output
+from agent_composer.nodes.binding import ParamDecl
+from agent_composer.nodes.call import CallNode
+from agent_composer.nodes.map import MapNode
+from agent_composer.runtime.engine import FlowEngine
+from agent_composer.state.pool import TypedVariablePool
 from tests.engine._fakes import BranchNode, FailNode, FuncNode, PauseOnceNode, drive, stamp_reads
 from tests.engine._graph_builder import _graph
 from tests.engine.test_golden_baseline import MAP_OVER_NOT_LIST_FMT

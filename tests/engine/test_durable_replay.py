@@ -8,14 +8,14 @@ tests pin: the clone+register helpers are deterministic (re-key identically),
 / MAP / AGENT / nested grown run reaches the SAME terminal as the live engine.
 """
 
-from agent_compose.compile.model import END_ID, START_ID, FlowOutput, NodeState
-from agent_compose.events import RunPaused, RunSucceeded
-from agent_compose.nodes.call.node import CallNode
-from agent_compose.nodes.human_input import HumanInputNode
-from agent_compose.nodes.map.node import MapNode
-from agent_compose.runtime.engine import FlowEngine
-from agent_compose.suspension.checkpoint import RunCheckpoint
-from agent_compose.suspension.commands import DeliverAnswerCommand
+from agent_composer.compile.model import END_ID, START_ID, FlowOutput, NodeState
+from agent_composer.events import RunPaused, RunSucceeded
+from agent_composer.nodes.call.node import CallNode
+from agent_composer.nodes.human_input import HumanInputNode
+from agent_composer.nodes.map.node import MapNode
+from agent_composer.runtime.engine import FlowEngine
+from agent_composer.suspension.checkpoint import RunCheckpoint
+from agent_composer.suspension.commands import DeliverAnswerCommand
 from tests.engine._fakes import FuncNode, stamp_reads
 from tests.engine._graph_builder import _graph
 from tests.engine.test_engine_expansions_ledger import (
@@ -31,7 +31,7 @@ from tests.engine.test_engine_expansions_ledger import (
 def test_grow_call_re_registers_identical_node_ids():
     """`_grow_call` re-keys the SAME cloned node ids for the same `(spawner, child, record)`
     across two fresh engines (the clone is pure: `ns(callsite, child_id)` has no counter)."""
-    from agent_compose.suspension.expansions import CallExpansion
+    from agent_composer.suspension.expansions import CallExpansion
 
     g1 = call_with_inner_pause()
     e1 = FlowEngine(g1)
@@ -245,7 +245,7 @@ def _map_n0_via_sibling():
 def test_durable_map_n0_via_sibling_resumes_on_fresh_flow():
     """A MAP over [] that fired before a sibling pause restores + resumes cross-process.
     The replay rebuilds EndNode.list_(n=0) (a 0-incoming root that emits [])."""
-    from agent_compose.suspension.expansions import MapExpansion
+    from agent_composer.suspension.expansions import MapExpansion
 
     proc1 = FlowEngine(_map_n0_via_sibling(), run_inputs={"items": []})
     assert isinstance(list(proc1.run())[-1], RunPaused)
@@ -282,9 +282,9 @@ def test_durable_two_pause_agent_resumes_on_fresh_flow(monkeypatch):
     ONE shared mock chat across the simulated processes: the carried memo replays prior turns
     WITHOUT re-invoking the model, so the 3 replies [q1, q2, FINAL] are consumed exactly once
     each even across restore (mirrors test_agent_continuation's single-chat invariant)."""
-    import agent_compose.llm_clients as llm
-    from agent_compose import load_flow
-    from agent_compose.compose.run import resume_command, run_flow
+    import agent_composer.llm_clients as llm
+    from agent_composer import load_flow
+    from agent_composer.compose.run import resume_command, run_flow
     from tests.engine.test_agent_continuation import _chat, ASK
 
     chat = _chat(_two_pause_agent_chat())                   # ONE instance shared across processes
@@ -311,10 +311,10 @@ def test_two_hop_agent_resnapshot_ledger_matches_live(monkeypatch):
     expansions tree must equal the live engine's: ONE AgentExpansion with 2 segments (NOT two
     top-level AgentExpansions / a truncated 1-segment tree). Then a 3rd process
     restore(fresh)->resume reaches RunSucceeded 'FINAL'."""
-    import agent_compose.llm_clients as llm
-    from agent_compose import load_flow
-    from agent_compose.compose.run import resume_command, run_flow
-    from agent_compose.suspension.expansions import AgentExpansion
+    import agent_composer.llm_clients as llm
+    from agent_composer import load_flow
+    from agent_composer.compose.run import resume_command, run_flow
+    from agent_composer.suspension.expansions import AgentExpansion
     from tests.engine.test_agent_continuation import _chat, ASK
 
     # --- live oracle: run to pause 2 on ONE engine; capture its ledger shape ---
@@ -399,7 +399,7 @@ def test_durable_map_of_call_resumes_on_fresh_flow():
     """A MAP-of-CALL grown to a deep per-element pause restores + resumes cross-process. The
     nested CallExpansion lives under children_per_element[0]; the replay recurses into it and
     rebuilds the doubly-namespaced clone."""
-    from agent_compose.suspension.expansions import CallExpansion, MapExpansion
+    from agent_composer.suspension.expansions import CallExpansion, MapExpansion
 
     proc1 = FlowEngine(_map_of_call_with_inner_pause(), run_inputs={"items": ["a"]})
     assert isinstance(list(proc1.run())[-1], RunPaused)
@@ -445,12 +445,12 @@ def test_durable_agent_under_call_resumes_on_fresh_flow(monkeypatch):
     gate CallExpansion (the `parent_desc is not None` AGENT arm). A cross-process
     dumps->loads->restore(fresh)->resume drives past the pause to RunSucceeded 'FINAL'. The
     parked leaf is deeply namespaced under BOTH the call AND the agent spawner."""
-    import agent_compose.llm_clients as llm
+    import agent_composer.llm_clients as llm
     from langchain_core.messages import AIMessage
 
-    from agent_compose import load_flow
-    from agent_compose.compose.run import resume_command, run_flow
-    from agent_compose.suspension.expansions import AgentExpansion, CallExpansion
+    from agent_composer import load_flow
+    from agent_composer.compose.run import resume_command, run_flow
+    from agent_composer.suspension.expansions import AgentExpansion, CallExpansion
     from tests.engine.test_agent_continuation import _ask, _chat
 
     chat = _chat([_ask({"question": "ok?"}, "q1"), AIMessage(content="FINAL")])  # ONE shared chat
@@ -480,12 +480,12 @@ def test_durable_two_pause_agent_under_call_resumes_on_fresh_flow(monkeypatch):
     a freshly recompiled flow, the resume grows segment 2 (still under the gate CallExpansion)
     and parks at pause 2; delivering it reaches RunSucceeded 'FINAL'. The segment-2 leaf chains
     under the segment-1 resume id AND the call namespace (triply deep)."""
-    import agent_compose.llm_clients as llm
+    import agent_composer.llm_clients as llm
     from langchain_core.messages import AIMessage
 
-    from agent_compose import load_flow
-    from agent_compose.compose.run import resume_command, run_flow
-    from agent_compose.suspension.expansions import AgentExpansion, CallExpansion
+    from agent_composer import load_flow
+    from agent_composer.compose.run import resume_command, run_flow
+    from agent_composer.suspension.expansions import AgentExpansion, CallExpansion
     from tests.engine.test_agent_continuation import _ask, _chat
 
     chat = _chat([_ask({"question": "q1?"}, "q1"), _ask({"question": "q2?"}, "q2"),
@@ -573,7 +573,7 @@ def test_replay_does_not_promote_a_top_level_agent_segment_child(monkeypatch):
     the `is_top_level` gate (vs the old `parent_depth == 0`, which an AGENT — depth unchanged —
     would wrongly re-trip) against the reserved slot."""
     from types import SimpleNamespace
-    from agent_compose.suspension.expansions import AgentExpansion, AgentSegment
+    from agent_composer.suspension.expansions import AgentExpansion, AgentSegment
 
     inner = AgentExpansion(spawner_id="inner",
                            segments=[AgentSegment(hi_desc={}, resume_desc={})])

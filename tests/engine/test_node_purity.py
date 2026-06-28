@@ -18,8 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from agent_compose.compile.model import CompiledFlow
-from agent_compose.compose import load_flow
+from agent_composer.compile.model import CompiledFlow
+from agent_composer.compose import load_flow
 
 _SEEDS = Path(__file__).resolve().parents[2] / "tests" / "seeds"
 
