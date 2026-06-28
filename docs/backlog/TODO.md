@@ -98,29 +98,29 @@ write boundary ✓ already exist; this builds **(c) generate** — constrain the
 shape. Layered strategy, with the boundary check kept as the final guarantee (defense-in-depth):
 generation *tries*, the boundary *enforces*, retry catches the residual.
 
-- [ ] **Shape → schema derivation** — convert a node's `output:` `Shape` into a JSON schema / pydantic
+- [x] ~~**Shape → schema derivation** — convert a node's `output:` `Shape` into a JSON schema / pydantic
   model that `with_structured_output` accepts. Skip a bare scalar `str` (today's text passthrough); apply
   for every other declared shape — records, lists, AND scalar `int`/`float` (structured extraction beats
-  text parsing).
-- [ ] **`plain` mode: native structured output** — invoke via `model.with_structured_output(schema)`
-  instead of the raw string return (`modes/plain.py:22`). The primary path.
-- [ ] **Boundary parse-retry** — on a write-boundary mismatch, re-invoke with the error appended
-  (self-correction), capped at N retries, then fail. The existing (b) check stays the enforcer.
-- [ ] **Authorable `retries:` field** — let an author set the self-correction cap per agent node
+  text parsing).~~ -- 44d6048
+- [x] ~~**`plain` mode: native structured output** — invoke via `model.with_structured_output(schema)`
+  instead of the raw string return (`modes/plain.py:22`). The primary path.~~ -- 8cf9d17
+- [x] ~~**Boundary parse-retry** — on a write-boundary mismatch, re-invoke with the error appended
+  (self-correction), capped at N retries, then fail. The existing (b) check stays the enforcer.~~ -- 0fd5a28
+- [x] ~~**Authorable `retries:` field** — let an author set the self-correction cap per agent node
   (`retries: 3`, default 2); threads parser → build → `AgentNode` → `AgentRunContext` →
-  `generate_structured(max_retries=...)`.
-- [ ] **Prompt-injection fallback + capability detection** — for providers/models without native
+  `generate_structured(max_retries=...)`.~~ -- 0fd5a28
+- [x] ~~**Prompt-injection fallback + capability detection** — for providers/models without native
   structured output, render the schema + "respond with JSON matching this" + parse. Detect support via a
-  **capability flag in the model catalog** (explicit, testable), not try/except.
-- [ ] **`tool_calling` mode: structured final answer** — the loop still calls tools mid-run, but the
+  **capability flag in the model catalog** (explicit, testable), not try/except.~~ -- 6752e6f, dc61c84
+- [x] ~~**`tool_calling` mode: structured final answer** — the loop still calls tools mid-run, but the
   FINAL answer turn must emit the declared shape (a forced final "emit" step / `with_structured_output`
-  on the synthesis turn). Lands after `plain`.
-- [ ] **Docs + skills (same change)** — `docs/syntax.md` (the `output:` → structured-generation
+  on the synthesis turn). Lands after `plain`.~~ -- bfc31ac
+- [x] ~~**Docs + skills (same change)** — `docs/syntax.md` (the `output:` → structured-generation
   contract; remove the "no JSON/structured parse" caveat at `syntax.md:100`), `composing-agents` skill
-  (`reference.md` + a typed-output template), `engine` skill if the agent contract notes change.
-- [ ] **Tests** — schema derivation per shape; `plain` native path; boundary-retry on a bad emit;
+  (`reference.md` + a typed-output template), `engine` skill if the agent contract notes change.~~ -- 8f876ad
+- [x] ~~**Tests** — schema derivation per shape; `plain` native path; boundary-retry on a bad emit;
   prompt-injection fallback for a no-native-support provider; `tool_calling` structured final answer;
-  bare-`str` still passes through untouched.
+  bare-`str` still passes through untouched.~~ -- e4504ce
 
 The **tool** typed-output half stays in DEFER ("Contract gaps") — same theme, separate node kind.
 
