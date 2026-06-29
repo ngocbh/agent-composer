@@ -59,6 +59,7 @@ from agent_composer.compose.cases import (
     reconcile_case_edges,
 )
 from agent_composer.compose.errors import LoadError
+from agent_composer.compose.human_questions import desugar_adaptive_questions
 from agent_composer.compose.uses import parse_uses_ref
 from agent_composer.compose.parser import (
     CallDescriptor,
@@ -549,6 +550,12 @@ def _assemble(
         descriptors, outputs_section, asserts_section=asserts_section, node_lines=n_lines,
         outputs_line=s_lines.get("output") or s_lines.get("outputs"), asserts_line=s_lines.get("asserts"), next_id=mint,
     )
+
+    # Lower each `human_input` `adaptive_questions:` block into a synth composer agent
+    # + the rewritten gate. A descriptor-level pass (the `desugar_inline_calls` precedent
+    # above): runs BEFORE the build loop so the synth agent flows through build + prompt-
+    # scope validation + ref wiring like any author-written agent.
+    descriptors = desugar_adaptive_questions(descriptors, node_lines=n_lines)
 
     # `then:/else: ${call}`: a `case` branch target that is an inline call becomes a
     # synth `call` node, the then:/else: rewritten to its id. Runs BEFORE expand_case_outputs
