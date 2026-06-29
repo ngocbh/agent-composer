@@ -7,14 +7,15 @@ there; eval_node's post-assert block never sees them. Before the fix they were s
 dropped — a false one passed quietly, violating "a false assert fails the run loudly".
 
 These pin: a true call post-assert passes, a false one fails the run LOUDLY (RunFailed,
-error_type "NodeAssertFailed", a non-null locator at the assert), and a post-assert reading
-BOTH a declared call input AND `${output}` fires correctly (the input is recovered from the
-persisted `CallExpansion.record`).
+error_type "NodeAssertFailed", a non-null locator at the assert), a post-assert reading BOTH
+a declared call input AND `${output}` fires correctly, and (durability) the input record the
+assert reads is recovered from the persisted `CallExpansion.record` after a checkpoint
+round-trip — no new checkpoint field.
 """
 
-from agent_composer.compose import load_flow, run_flow
+from agent_composer.compose import load_flow, resume_command, resume_flow, run_flow
 from agent_composer.events import RunFailed
-
+from agent_composer.suspension.checkpoint import RunCheckpoint
 
 
 # A child that re-exports a {report, n} record (the Ollama-free CODE child pattern). The
@@ -128,3 +129,83 @@ def test_call_post_assert_reads_input_true():
     loaded = _load('      - ${topic} == "ACME" and ${output.n} == 4')
     res = run_flow(loaded, {})
     assert res.status == "succeeded", res.error
+
+
+# --- 4. durable: the input record survives suspend/resume -------------------- #
+#
+# A `call` whose child contains a HUMAN_INPUT (so the run suspends mid-child). The call's
+# post-assert reads BOTH a declared input (`action`) and `${output}`. Driving
+# run_flow -> pause -> snapshot/dumps -> loads/restore -> resume must fire the post-assert on
+# the RESUMED leg, recovering the input record from the persisted CallExpansion.record (no new
+# checkpoint field). A false assert -> RunFailed on resume; a true one -> success.
+
+_PAUSING_CHILD = """
+id: approver
+name: approver
+input:
+  action: str
+nodes:
+  approve:
+    kind: human_input
+    input:
+      action: ${input.action}
+    prompt: "Approve ${action}?"
+    output: str
+output: ${approve.output}
+"""
+
+
+def _pausing_parent(asserts: str) -> str:
+    return f"""
+id: gate-parent
+name: gate_parent
+uses:
+  approver: approver
+input:
+  action: str
+nodes:
+  gate:
+    kind: call
+    call: approver
+    input:
+      action: ${{input.action}}
+    asserts:
+{asserts}
+output: ${{gate.output}}
+"""
+
+
+def _load_pausing(asserts: str):
+    return load_flow(_pausing_parent(asserts),
+                     child_resolver=_resolver(**{"approver": _PAUSING_CHILD}))
+
+
+def _drive_durable(asserts: str, answer: str):
+    """run -> pause -> cross-process snapshot/dumps -> loads/restore -> resume, returning the
+    resumed RunResult. The post-assert fires on the resumed leg over the recovered record."""
+    loaded = _load_pausing(asserts)
+    rec = run_flow(loaded, {"action": "deploy"})
+    assert rec.status == "paused"
+    reason = rec.pause_reasons[0]
+    ckpt = RunCheckpoint.loads(rec.checkpoint.dumps())  # cross-process round-trip
+    fresh = load_flow(_pausing_parent(asserts),
+                      child_resolver=_resolver(**{"approver": _PAUSING_CHILD}))
+    cmd = resume_command(fresh, reason, answer)
+    return resume_flow(fresh, checkpoint=ckpt, commands=[cmd])
+
+
+def test_call_post_assert_survives_resume_true():
+    # a TRUE input+output post-assert fires on the RESUMED leg -> success. Proves the call's
+    # input record (`action`) is recovered from CallExpansion.record after the checkpoint hop.
+    res = _drive_durable('      - ${action} == "deploy" and ${output} == "yes"', "yes")
+    assert res.status == "succeeded", res.error
+    assert res.output == "yes"
+
+
+def test_call_post_assert_survives_resume_false():
+    # a FALSE post-assert on the resumed leg -> RunFailed, NodeAssertFailed, located at the call.
+    res = _drive_durable('      - ${action} == "deploy" and ${output} == "no"', "yes")
+    assert res.status == "failed"
+    failed = [e for e in res.events if isinstance(e, RunFailed)]
+    assert failed and failed[0].error_type == "NodeAssertFailed"
+    assert res.locator is not None and res.locator.node == "gate" and res.locator.kind == "assert"

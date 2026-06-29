@@ -78,7 +78,7 @@ landed at 9867b04):
 
 ## Open bugs / known issues
 
-- [ ] **Node-local post-`asserts:` on a spawner (`call`/`map`) are silently dropped.** A leaf node's
+- [x] ~~**Node-local post-`asserts:` on a spawner (`call`/`map`) are silently dropped.** A leaf node's
   node-local `asserts:` reading `${output}` fire correctly (eval_node POST block), but a `call`/`map`
   node returns an `Enqueue` and `eval_node` yields `NodeExpanded` + `return`s
   (`runtime/eval_node.py:113`) BEFORE the post-assert block (`:122`). The spawner's value is deferred
@@ -88,7 +88,9 @@ landed at 9867b04):
   inputs) on a spawner DO fire. **Fix:** evaluate the spawner node's post-asserts against the
   alias-filled value at the `_apply_enqueue`/alias-commit site (where `event.output` lands), not in the
   per-node run path. Until fixed, assert a call's output via a top-level flow `asserts:` reading
-  `${<call_id>.output...}` (those DO fire) or a downstream typed validation node.
+  `${<call_id>.output...}` (those DO fire) or a downstream typed validation node.~~ -- `map` post-asserts
+  are LOAD-rejected, so this only affected `call`; fired at the `_on_success` alias-commit site, recovering
+  the call's input record from the persisted `CallExpansion.record`. -- 21dc4cc
 
 - [ ] **`ask_user` resume is broken for providers with dashed tool-call ids (e.g. Ollama uuids).**
   When a `tool_calling` agent calls the `ask_user` control, the loop mints a namespaced human-input
