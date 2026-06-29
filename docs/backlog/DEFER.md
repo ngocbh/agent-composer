@@ -160,7 +160,7 @@ the checkpoint would remove that host obligation but couples the persisted run t
   now renders a Python-traceback-style STACK of boxed `.yaml` frames descending into the `defs:` /
   external `uses:` child down to the ACTUAL failing node (not just the owning call node) — parser
   `def_node_lines`/`def_node_field_lines` + a render-only `SourceFrame` on each call/map node's
-  `child_source`, walked by `cli/run.py:_walk_call_frames`. See TODO "Multi-frame call traceback".
+  `child_source`, walked by `cli/run.py:_walk_call_frames`. See TODO "Multi-frame call traceback". -- e801d26
 
 - [ ] **Line-precise vs. node-precise compile-error highlight.** The CLI renders a `LoadError` as a
   boxed `.yaml` source frame with the offending line highlighted (`cli/run.py:_render_load_error`,
