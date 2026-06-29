@@ -1,0 +1,50 @@
+# A `human_input` gate that asks MULTIPLE questions (not one typed answer).
+# Each question is AskUserQuestion-shaped: {question, header, options, multi_select}.
+# `options` (omit -> free-text) and `multi_select` (default false) are optional;
+# 1-4 questions, headers unique. The host always offers a free-text "Other".
+# The answer is a RECORD keyed by each header ({Framework: React, Notes: "..."}),
+# so `output:` defaults to `object`. `prompt:` is optional once a node has
+# questions. `questions:` and `adaptive_questions:` are MUTUALLY EXCLUSIVE.
+
+id: human-questions
+name: human_questions
+description: Ask a person a set of questions (static + LLM-composed), keyed by header.
+
+input:
+  proj: str
+
+nodes:
+  # (A) STATIC — a literal questions list, with ${proj} templated into the text.
+  ask_static:
+    kind: human_input
+    input:
+      proj: ${input.proj}          # context the question text may reference
+    questions:
+      - question: "Which framework for ${proj}?"   # ${proj} renders from input
+        header: Framework                          # answer key -> {Framework: <label>}
+        options:
+          - { label: React, description: A component library. }
+          - { label: Vue, description: A progressive framework. }
+        multi_select: false        # optional, default false
+      - question: "Any notes for the build?"       # no options -> free-text
+        header: Notes
+    # output omitted -> defaults to object: {Framework: ..., Notes: ...}
+
+  # (B) ADAPTIVE — an LLM composes the questions from context. This block
+  # DESUGARS at load into a synth compose-agent (ask_adaptive__compose, output
+  # list[Question]) wired into the gate; the runtime gate never calls an LLM.
+  ask_adaptive:
+    kind: human_input
+    input:
+      ctx: ${ask_static.output}    # feed the static answers as composing context
+    adaptive_questions:
+      prompt: "Design 1-3 follow-up questions with options for: ${ctx}"
+      mode: plain                  # optional, default plain
+      retries: 3                   # optional — self-correction attempts
+
+  # (C) MANUAL REF (not shown as a node): write your own composer node and wire
+  #   input: { qs: ${composer.output} }   # composer.output is a list[Question]
+  #   questions: ${qs}
+
+# Both gate answers are object records keyed by header. Coalesce as the result.
+output: ${ask_adaptive.output}

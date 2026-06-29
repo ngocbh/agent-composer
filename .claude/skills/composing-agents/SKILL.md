@@ -214,6 +214,27 @@ approve:
     Approve as-is, or revise? (approve / revise)
   output: Approval                    # a typed answer, e.g. a Literal enum
 ```
+Instead of a typed `prompt:`+`output:`, a gate can present **questions** (1–4,
+AskUserQuestion-shaped) — the answer is a record keyed by each `header`; `output:`
+then defaults to `object`. `prompt:` is optional; `questions:` and
+`adaptive_questions:` are mutually exclusive. The gate stays **PURE** (never calls
+an LLM): `adaptive_questions:` is LOAD-TIME sugar that lowers to a compose-agent +
+gate.
+```yaml
+ask:                                  # (A) static questions list
+  kind: human_input
+  input: { proj: ${input.proj} }      # ${proj} renders into question text
+  questions:
+    - question: "Which framework for ${proj}?"
+      header: Framework               # answer key -> {Framework: <label>}
+      options: [ {label: React, description: a lib}, {label: Vue, description: a fw} ]
+    - { question: "Any notes?", header: Notes }   # no options -> free-text
+ask2:                                 # (B) LLM composes them (desugars at load)
+  kind: human_input
+  input: { ctx: ${research.output} }
+  adaptive_questions: { prompt: "Design 1-3 questions for: ${ctx}", retries: 3 }
+```
+(Form (C): read a list from an upstream node — `questions: ${qs}`.)
 
 ### `wait` — a timed pause
 ```yaml

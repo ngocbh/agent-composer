@@ -19,7 +19,8 @@ Copy, rename, and edit.
 | [`typed_output.yaml`](templates/typed_output.yaml) | AGENT with a record `output:` — structured generation + `retries:` |
 | [`branching.yaml`](templates/branching.yaml) | classify → `case` route → `\|` join |
 | [`tool-use.yaml`](templates/tool-use.yaml) | a `tool` node (no LLM) feeding an AGENT |
-| [`human-in-loop.yaml`](templates/human-in-loop.yaml) | a `human_input` pause/gate |
+| [`human-in-loop.yaml`](templates/human-in-loop.yaml) | a `human_input` pause/gate (typed approve/revise answer) |
+| [`human-questions.yaml`](templates/human-questions.yaml) | a `human_input` gate with multiple questions — static `questions:` + `adaptive_questions:` |
 | [`child-summarize.yaml`](templates/child-summarize.yaml) | a reusable CHILD flow |
 | [`call-child.yaml`](templates/call-child.yaml) | `call` a sibling flow once (via `uses:`) |
 | [`map-fanout.yaml`](templates/map-fanout.yaml) | `map` a child over a list, in parallel |
@@ -96,7 +97,11 @@ skipped) or `runs_after: [a]` (orders only; B still runs).
 
 **Ask the human.** For a *guaranteed* gate use a `human_input` node (always
 pauses). For "ask only if the model decides it needs to", give a `tool_calling`
-agent `controls: [ask_user]`.
+agent `controls: [ask_user]`. A `human_input` gate can present multiple
+multiple-choice questions (static `questions:`), have an LLM compose them
+(`adaptive_questions:`, which desugars to a compose-agent + gate at load), or read
+them from an upstream node (`questions: ${name}`); the answer is then a record
+keyed by each question's `header`.
 
 **Reuse a sub-flow.** Factor the repeated work into its own flow file, bind it with
 `uses: <alias>: <filename>`, and `call:` it (once) or `map:` it (per list element).

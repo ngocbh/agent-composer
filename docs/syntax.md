@@ -292,6 +292,58 @@ approve:
   output: Approval             # a typed answer, e.g. a Literal enum
 ```
 
+Instead of (or alongside) a `prompt:`, a gate may carry **questions** —
+AskUserQuestion-shaped multiple-choice/free-text prompts. Each question is
+`{question, header, options:[{label, description}], multi_select}`; `options`
+(omit ⇒ free-text) and `multi_select` (default `false`) are optional. 1–4
+questions, headers unique. The host always offers a free-text **"Other"** escape.
+The gate's answer is a **record keyed by header** — `{header: label}`, or
+`{header: [labels]}` for a `multi_select` question — so `output:` defaults to
+`object`. `prompt:` is optional once a node has questions; `questions:` and
+`adaptive_questions:` are **mutually exclusive**.
+
+**(A) static** — a literal list (with `${...}` templating from `input:`):
+
+```yaml
+ask:
+  kind: human_input
+  input: { proj: ${input.proj} }
+  questions:
+    - question: "Which framework for ${proj}?"   # ${proj} renders from input
+      header: Framework                          # answer key -> {Framework: <label>}
+      options:
+        - { label: React, description: A component library. }
+        - { label: Vue, description: A progressive framework. }
+      multi_select: false        # optional, default false
+    - question: "Any notes for the build?"       # no options -> free-text
+      header: Notes
+  # output omitted -> defaults to object: {Framework: ..., Notes: ...}
+```
+
+**(B) adaptive** — an LLM composes the questions from context. The block
+**desugars at load** into a synth compose-agent (`<node>__compose`, output
+`list[Question]`) wired into the gate; the runtime gate never calls an LLM.
+
+```yaml
+ask:
+  kind: human_input
+  input: { ctx: ${research.output} }
+  adaptive_questions:
+    prompt: "Design 1-3 questions with options for: ${ctx}"  # required (LLM brief)
+    mode: plain                  # optional, default plain
+    llm_config: { model: ... }   # optional — the composer's provider/model
+    retries: 3                   # optional — self-correction attempts
+```
+
+**(C) manual ref** — read the list from an author-written upstream node:
+
+```yaml
+ask:
+  kind: human_input
+  input: { qs: ${composer.output} }   # composer.output is a list[Question]
+  questions: ${qs}
+```
+
 ### `wait` — a timed pause
 
 ```yaml
