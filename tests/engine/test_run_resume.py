@@ -92,6 +92,36 @@ output: ${confirm.output | abort.output}
 """
 
 
+_RESUME_FANOUT = """
+id: rf
+name: rf
+input:
+  settle_at: date
+nodes:
+  settle:
+    kind: wait
+    until: ${input.settle_at}
+  pro:
+    kind: code
+    depends_on: [settle]
+    input: {topic: "${input.settle_at}"}
+    output: str
+    code: tests.engine._compose_codefns:positive
+  con:
+    kind: code
+    depends_on: [settle]
+    input: {topic: "${input.settle_at}"}
+    output: str
+    code: tests.engine._compose_codefns:cautious
+  merge:
+    kind: code
+    input: {pro: "${pro.output}", con: "${con.output}"}
+    output: str
+    code: tests.engine._compose_codefns:join_two
+output: ${merge.output}
+"""
+
+
 def test_effects_approve_path():
     loaded = load_flow(EFFECTS)
     r1 = run_flow(loaded, {"settle_at": "2026-07-01"})
@@ -202,3 +232,24 @@ def test_checkpoint_rejects_pre_6_blob():
     raw["version"] = "5.0"                       # force an older version explicitly
     with pytest.raises(ValueError, match="incompatible checkpoint version"):
         RunCheckpoint.loads(json.dumps(raw))
+
+
+def test_live_pooled_resume_matches_serial():
+    """A run started pooled pauses at the wait; resume() then drives the post-wait fan-out
+    under the POOLED driver and reaches the SAME terminal as a serial resume."""
+    from agent_composer.compose.run import run_flow, resume_flow
+    from agent_composer.suspension.commands import DeliverAnswerCommand
+    loaded = load_flow(_RESUME_FANOUT)
+
+    serial = run_flow(loaded, {"settle_at": "2026-07-01"}, num_workers=0)
+    assert serial.status == "paused"
+    s2 = resume_flow(loaded, engine=serial.engine,
+                     commands=[DeliverAnswerCommand(node_id="settle", value=None)])
+    assert s2.status == "succeeded", s2.error
+
+    pooled = run_flow(loaded, {"settle_at": "2026-07-01"}, num_workers=4)
+    assert pooled.status == "paused"
+    p2 = resume_flow(loaded, engine=pooled.engine,
+                     commands=[DeliverAnswerCommand(node_id="settle", value=None)])
+    assert p2.status == "succeeded", p2.error
+    assert p2.output == s2.output

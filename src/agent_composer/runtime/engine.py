@@ -15,8 +15,9 @@ knob, sharing one set of state-mutation helpers (`_on_success`/`_on_pause`/
   writer of graph/edge/pool state.
 
 Both modes capture all of graphon's *correctness* (3-state edge join, exact-once
-fan-in, outputs-before-successors, branch skip-flood). The in-memory
-`resume()` is serial-only (`num_workers==0`).
+fan-in, outputs-before-successors, branch skip-flood). `resume()` drives under the
+same `num_workers` mode the engine carries (serial or pooled), via the shared
+`_drive_to_terminal`.
 
 Load-bearing orderings (do not reorder):
 - A node's outputs are written to the pool **before** any successor is scheduled.
@@ -422,7 +423,8 @@ class FlowEngine:
         only THEN clear paused/deferred and seed = deferred + ready. This makes a
         multi-command resume drop no successor and double-run none — a fan-in fires exactly
         once after all its predecessors are delivered. NO re-enqueue of paused nodes (the
-        re-run model is gone). Resume is serial (num_workers==0)."""
+        re-run model is gone). Resume drives under the SAME drive mode the engine carries
+        (serial or pooled), via the shared _drive_to_terminal."""
         yield RunResumed()
         # A commandless resume of a STILL-paused run re-emits RunPaused and returns
         # WITHOUT clearing self.paused. An idempotent poll / watcher tick / partial multi-pause
@@ -431,29 +433,21 @@ class FlowEngine:
         if self.paused and not (commands or []):
             yield RunPaused(reasons=[reason for _, reason in self.paused])
             return
+        # Apply commands WHILE self.paused is still set (successors route to deferred). A
+        # type-invalid answer raises NodeExecutionError here -> RunFailed (resume never crashes).
         try:
             for command in commands or []:
-                # Deliver each answer WHILE self.paused is still set so successors route to
-                # self.deferred. A type-invalid answer raises NodeExecutionError here (the
-                # deliver guard) and FAILS the run — it does not crash resume.
                 self._apply_command(command)
-            seed = list(self.deferred) + list(self.ready)
-            self.paused = []
-            self.deferred = []
-            self.ready = deque()   # seed already captured it; _enqueue re-appends each id ONCE
-            for node_id in seed:
-                self._enqueue(node_id)
-            yield from self._drain()
-        except _Aborted:
-            yield RunAborted()
-            return
         except NodeExecutionError as exc:
             yield RunFailed(error=exc.error, error_type=exc.error_type, locator=exc.locator)
             return
-        if self.paused:
-            yield RunPaused(reasons=[reason for _, reason in self.paused])
-            return
-        yield self._terminal_event()
+        seed = list(self.deferred) + list(self.ready)
+        self.paused = []
+        self.deferred = []
+        self.ready = deque()           # seed already captured it; _enqueue re-appends once
+        for node_id in seed:
+            self._enqueue(node_id)     # serial -> self.ready; pooled -> self.ready_q
+        yield from self._drive_to_terminal()
 
     def _apply_command(self, command) -> None:
         from agent_composer.suspension.commands import (
