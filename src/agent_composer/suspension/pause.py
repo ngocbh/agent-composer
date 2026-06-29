@@ -28,6 +28,10 @@ class HumanInputRequired(BaseModel):
             The text to show the human.
         answer_schema (`list[dict]`, *optional*, defaults to `[]`):
             IOField-shaped description of the expected answer; the CLI renders against it.
+        questions (`list[dict]`, *optional*, defaults to `[]`):
+            Structured questions for the host to render. Empty (default) = the legacy
+            prompt-only form. Non-empty = a list of serialized `QuestionSpec` dicts, each
+            shaped `{question, header, options, multi_select}`.
         node_title (`str`, *optional*, defaults to `None`):
             A human-friendly node title for display, if any.
         node_id (`str`, *optional*, defaults to `None`):
@@ -40,6 +44,9 @@ class HumanInputRequired(BaseModel):
     prompt: str
     # IOField-shaped expected answer (loose dicts; the CLI renders against it).
     answer_schema: list[dict[str, Any]] = Field(default_factory=list)
+    # Serialized QuestionSpec dicts ({question, header, options, multi_select}) for the host
+    # to render. Empty (default) => legacy prompt-only form; non-empty => structured questions.
+    questions: list[dict[str, Any]] = Field(default_factory=list)
     node_title: Optional[str] = None
     # LOGICAL resumption identity: the node that paused. The agent `ask_user` pause is now a
     # namespaced HUMAN_INPUT leaf, so `compose.run.resume_command` delivers the answer
