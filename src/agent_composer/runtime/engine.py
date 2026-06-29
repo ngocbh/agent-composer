@@ -638,6 +638,12 @@ class FlowEngine:
                     self._spawner_expansion[nid] = desc
         self.depth[cloned.out_node_id] = d      # the filler's alias carries the depth
         self.alias[cloned.out_node_id] = spawner_id
+        # Reach the CallExpansion from the FILLER id too (not just the cloned spawner subnodes
+        # above): _on_success commits the call's value at the filler/alias site and needs the
+        # call's input `record` there to evaluate the call's `${output}` post-asserts. Mirrors
+        # _grow_agent_segment stamping the resume id. On the shared path (live + replay), so it
+        # rebuilds on restore.
+        self._spawner_expansion[cloned.out_node_id] = desc
         self.sm.finish_executing(spawner_id)
         self.sm.mark_node(spawner_id, NodeState.EXPANDED)
         if schedule:
@@ -946,6 +952,24 @@ class FlowEngine:
                     node_id, str(exc), type(exc).__name__,
                     locator=SourceSpan(node=spawner_id, kind="field", key="output"),
                 )
+            # A CALL's value is committed HERE (at the filler/alias site), not in eval_node —
+            # the spawner only yielded an Enqueue. So its node-local POST asserts (which read
+            # `${output}`) must fire HERE, against {**inputs, "output": value}. The call's input
+            # record is recovered from the persisted CallExpansion.record (survives suspend/resume
+            # for free; no new checkpoint field). Leaf post-asserts still fire in eval_node.
+            if spawner.kind == NodeKind.CALL and spawner.post_asserts:
+                from agent_composer.suspension.expansions import CallExpansion
+                desc = self._spawner_expansion.get(node_id)
+                record = desc.record if isinstance(desc, CallExpansion) else {}
+                post_record = {**record, "output": event.output}
+                for a in spawner.post_asserts:
+                    if not spawner._assert_holds(a, post_record):
+                        self.sm.finish_executing(node_id)
+                        raise NodeExecutionError(
+                            node_id, f"node {spawner_id!r} post-assert failed: {a}",
+                            "NodeAssertFailed",
+                            locator=SourceSpan(node=spawner_id, kind="assert", key=a),
+                        )
             self.sm.finish_executing(node_id)
             for nid in self._advance(spawner_id):
                 self._schedule(nid)
