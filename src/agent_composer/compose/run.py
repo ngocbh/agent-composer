@@ -242,6 +242,7 @@ def resume_flow(
     commands: Optional[List[Any]] = None,
     on_event: Optional[EventHook] = None,
     llm_config: Optional[Dict[str, Any]] = None,
+    num_workers: Optional[int] = None,
 ) -> RunResult:
     """
     Drive a suspended run to its next terminal via exactly one resume handle.
@@ -273,6 +274,10 @@ def resume_flow(
             leaves unset. On a durable resume the CLI config is NOT persisted across
             processes, so the host must re-supply it; it is re-applied to the recompiled flow
             before `restore`.
+        num_workers (`int`, *optional*, defaults to `None`):
+            Override the drive mode for a DURABLE (`checkpoint=`) resume; `None` keeps the
+            checkpointed count. Ignored with a live `engine=` (the live engine keeps its own
+            mode).
 
     Returns:
         `RunResult`:
@@ -291,7 +296,7 @@ def resume_flow(
         # is not persisted across processes — the host re-supplies it here). In-process resume
         # via engine= already carries the resolved configs baked on the live graph.
         resolve_llm_cascade(loaded.compiled, llm_config or {})
-        engine = FlowEngine.restore(loaded.compiled, checkpoint)
+        engine = FlowEngine.restore(loaded.compiled, checkpoint, num_workers=num_workers)
 
     events: List[Any] = []
     status, output, error = "incomplete", None, None

@@ -253,3 +253,17 @@ def test_live_pooled_resume_matches_serial():
                      commands=[DeliverAnswerCommand(node_id="settle", value=None)])
     assert p2.status == "succeeded", p2.error
     assert p2.output == s2.output
+
+
+def test_resume_flow_num_workers_passthrough():
+    """A durable (checkpoint=) resume accepts a num_workers override and drives the
+    restored engine under that mode to terminal."""
+    from agent_composer.compose.run import run_flow, resume_flow
+    from agent_composer.suspension.commands import DeliverAnswerCommand
+    from agent_composer.suspension.checkpoint import RunCheckpoint
+    loaded = load_flow(_RESUME_FANOUT)
+    paused = run_flow(loaded, {"settle_at": "2026-07-01"})
+    ckpt = RunCheckpoint.loads(paused.checkpoint.dumps())
+    res = resume_flow(loaded, checkpoint=ckpt, num_workers=4,
+                      commands=[DeliverAnswerCommand(node_id="settle", value=None)])
+    assert res.status == "succeeded", res.error
