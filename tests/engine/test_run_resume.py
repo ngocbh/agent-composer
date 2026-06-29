@@ -178,3 +178,27 @@ def test_resume_command_does_not_require_node_in_compiled_flow():
     cmd = resume_command(loaded, reason, "x")
     assert isinstance(cmd, DeliverAnswerCommand)
     assert cmd.node_id == "call_sub/w"                              # passed straight through
+
+
+def test_checkpoint_persists_num_workers_roundtrip():
+    """num_workers survives a dumps()->loads() round-trip; absent it would default to 0
+    and a pooled resume would silently downgrade to serial."""
+    from agent_composer.state.pool import TypedVariablePool
+    ckpt = RunCheckpoint(pool=TypedVariablePool(), num_workers=4)
+    loaded = RunCheckpoint.loads(ckpt.dumps())
+    assert loaded.num_workers == 4
+
+
+def test_checkpoint_num_workers_defaults_zero():
+    from agent_composer.state.pool import TypedVariablePool
+    ckpt = RunCheckpoint(pool=TypedVariablePool())
+    assert ckpt.num_workers == 0
+
+
+def test_checkpoint_rejects_pre_6_blob():
+    import json
+    from agent_composer.state.pool import TypedVariablePool
+    raw = json.loads(RunCheckpoint(pool=TypedVariablePool()).dumps())
+    raw["version"] = "5.0"                       # force an older version explicitly
+    with pytest.raises(ValueError, match="incompatible checkpoint version"):
+        RunCheckpoint.loads(json.dumps(raw))

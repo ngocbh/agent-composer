@@ -10,6 +10,7 @@ Only run state is captured:
 - `deferred_nodes`  — became ready while suspending; enqueue on resume
 - `pause_reasons`   — what each paused node awaits (drives the watcher/CLI)
 - `expansions`      — descriptor tree for runtime-grown subgraphs (replayed on restore)
+- `num_workers`     — the producer/consumer drive mode the run used (0 = serial, >=1 = pool size)
 
 A round-trip through `dumps()`/`loads()` reconstructs an equivalent run in any
 process.
@@ -36,8 +37,10 @@ from agent_composer.suspension.pause import PauseReason
 # wire-compatible — `pause_reasons` is unchanged — but pre-5.0 blobs are rejected as a
 # forward-compat hard cutover: this is the first build to write/expect the field, and a
 # pre-5.0 checkpoint of a grown run carries no descriptors for the (forthcoming) replay.
-# Pre-5.0 blobs are NOT loadable.
-CHECKPOINT_VERSION = "5.0"
+# Pre-5.0 blobs are NOT loadable. 5.0 -> 6.0: adds the additive `num_workers` field (the
+# producer/consumer drive mode the run used); pre-6.0 blobs are NOT loadable (hard cutover,
+# consistent with prior bumps).
+CHECKPOINT_VERSION = "6.0"
 
 
 class RunCheckpoint(BaseModel):
@@ -70,6 +73,10 @@ class RunCheckpoint(BaseModel):
         expansions (`list[Expansion]`, *optional*, defaults to `[]`):
             Descriptor tree for runtime-grown subgraphs, replayed top-down on restore.
             Empty for any run that never expanded.
+        num_workers (`int`, *optional*, defaults to `0`):
+            The producer/consumer drive mode the run used: 0 = single-threaded inline
+            drain, >=1 = worker-pool size. Lets a checkpointed run resume under the same
+            (or a chosen) drive mode.
     """
 
     version: str = CHECKPOINT_VERSION
@@ -87,6 +94,12 @@ class RunCheckpoint(BaseModel):
     # re-grow the cloned subgraphs before resume. Empty for any run that never expanded (pure
     # static flows).
     expansions: list[Expansion] = Field(default_factory=list)
+
+    # The producer/consumer drive mode the run used: 0 = single-threaded inline drain,
+    # >=1 = worker-pool size. snapshot() captures engine.num_workers; restore() rebuilds
+    # the engine at this count (overridable) so a checkpointed run resumes under the same
+    # (or a chosen) drive mode. Defaults 0 (serial) for a checkpoint built without it.
+    num_workers: int = 0
 
     def dumps(self) -> str:
         return self.model_dump_json()
