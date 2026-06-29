@@ -169,13 +169,13 @@ def test_checkpoint_v1_object_rejected_by_restore():
 
 
 def test_checkpoint_current_version_round_trip_carries_store():
-    # The single-value store survives dumps/loads transitively through the pool, at the "5.0"
-    # checkpoint version (bumped when the additive `expansions` descriptor
+    # The single-value store survives dumps/loads transitively through the pool, at the "6.0"
+    # checkpoint version (bumped when the additive `num_workers` drive-mode
     # field was added). The version label here tracks the CURRENT default.
     pool = TypedVariablePool()
     pool.set("n", "v")
     back = RunCheckpoint.loads(RunCheckpoint(pool=pool).dumps())
-    assert back.version == "5.0"
+    assert back.version == "6.0"
     assert back.pool.get("n") == "v"
 
 
@@ -351,11 +351,11 @@ def test_human_input_run_takes_no_scratch_cap():
     assert "scratch" not in sig.parameters     # HUMAN_INPUT.run takes no *, scratch cap
 
 
-def test_checkpoint_v5_is_current_version():
-    # the engine's blob version is now 5.0 (adds the additive expansions field).
-    # A pre-5.0 blob is not loadable.
+def test_checkpoint_v6_is_current_version():
+    # the engine's blob version is now 6.0 (adds the additive num_workers field).
+    # A pre-6.0 blob is not loadable.
     from agent_composer.suspension.checkpoint import CHECKPOINT_VERSION
-    assert CHECKPOINT_VERSION == "5.0"
+    assert CHECKPOINT_VERSION == "6.0"
 
 
 def test_checkpoint_v4_blob_rejected_by_loads():
