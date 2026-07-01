@@ -984,9 +984,9 @@ class FlowEngine:
             return
         node = self.flow.nodes[node_id]
         # (a) the node's ONE value lands in the pool BEFORE successors are scheduled,
-        # type-enforced against the node's declared Shape. IF_ELSE is routing-only
+        # type-enforced against the node's declared Shape. CASE is routing-only
         # (no value) — it writes nothing.
-        if node.kind != NodeKind.IF_ELSE:
+        if node.kind != NodeKind.CASE:
             try:
                 self.pool.set(node_id, event.output, declared=node.output_shape)
             except SegmentError as exc:
@@ -997,7 +997,7 @@ class FlowEngine:
                 )
         self.sm.finish_executing(node_id)
 
-        if node.kind == NodeKind.IF_ELSE:
+        if node.kind == NodeKind.CASE:
             newly_ready = self._branch(node_id, event.edge_source_handle or DEFAULT_HANDLE)
         else:
             newly_ready = self._advance(node_id)

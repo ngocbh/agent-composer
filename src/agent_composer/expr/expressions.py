@@ -296,7 +296,7 @@ def evaluate_when(expression: str, pool: TypedVariablePool) -> bool:
     Parses and folds the expression — comparisons (`==` `!=` `<` `<=` `>` `>=` `in`
     `not in`) over `${...}` references and literals, combined with `and` / `or` / `not`
     — to a single boolean. This is the pool-based path, kept for manifest parse-checks and
-    the deferred LOOP `while:` predicate seam; strict `IF_ELSE` uses the record-based path.
+    the deferred LOOP `while:` predicate seam; strict `CASE` uses the record-based path.
 
     Args:
         expression (`str`):
@@ -336,7 +336,7 @@ def first_failing_assert(exprs, pool: TypedVariablePool):
 
 
 def evaluate_when_record(expression: str, record: dict) -> bool:
-    """Evaluate a strict-IF_ELSE `when:` against the node's bound input record.
+    """Evaluate a strict-CASE `when:` against the node's bound input record.
 
     `${name}` / `${name.path}` resolve against `record`; a miss -> None, which is falsy
     through ==/!=/ordered comparisons (the locked `when:` missing->falsy contract).

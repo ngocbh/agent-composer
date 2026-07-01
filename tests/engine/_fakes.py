@@ -108,9 +108,9 @@ class ReturnsFailedNode(Node):
 
 
 class BranchNode(Node):
-    """IF_ELSE: returns a chosen handle (which downstream edge to take)."""
+    """CASE: returns a chosen handle (which downstream edge to take)."""
 
-    kind = NodeKind.IF_ELSE
+    kind = NodeKind.CASE
 
     def __init__(self, node_id: str, handle: str, **kw: Any) -> None:
         super().__init__(node_id, **kw)

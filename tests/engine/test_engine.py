@@ -1,7 +1,7 @@
 """Unit tests for the single-threaded FlowEngine drain.
 
 These exercise scheduling semantics with fake nodes (no LLMs/tools):
-ordering, fan-out, exact-once diamond join, IF_ELSE branch + skip-flood,
+ordering, fan-out, exact-once diamond join, CASE branch + skip-flood,
 outputs-before-successors, failure, abort, and pause.
 """
 
@@ -208,10 +208,10 @@ def test_outputs_written_before_successor_runs():
     assert seen["upstream"] == "payload"
 
 
-# --- IF_ELSE branch + skip -------------------------------------------------- #
+# --- CASE branch + skip -------------------------------------------------- #
 
 
-def test_if_else_takes_branch_and_skips_other():
+def test_case_takes_branch_and_skips_other():
     log: list = []
     g = _graph(
         [BranchNode("cond", "yes"), RecordNode("b", log), RecordNode("c", log)],
@@ -224,7 +224,7 @@ def test_if_else_takes_branch_and_skips_other():
     assert isinstance(events[-1], RunSucceeded)
 
 
-def test_if_else_default_fallback():
+def test_case_default_fallback():
     log: list = []
     g = _graph(
         [BranchNode("cond", "default"), RecordNode("b", log), RecordNode("c", log)],

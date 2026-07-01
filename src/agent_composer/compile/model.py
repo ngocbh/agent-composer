@@ -53,7 +53,7 @@ class Edge:
     id: str                               # unique edge id within the flow
     from_: str                            # producer node id
     to: str                               # consumer node id
-    source_handle: Optional[str] = None   # branch label on an edge leaving an IF_ELSE node; None otherwise
+    source_handle: Optional[str] = None   # branch label on an edge leaving an CASE node; None otherwise
     input_group: Optional[str] = None     # the consumer input this data edge feeds; None for pure control/ordering edges
     optional: bool = False                # if True, a skipped producer does NOT co-skip the consumer
                                           # (a data group with a literal / `:?` default, or an ordering edge)

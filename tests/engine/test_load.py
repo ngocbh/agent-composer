@@ -20,7 +20,7 @@ import pytest
 from agent_composer.compile.model import END_ID, START_ID, CompiledFlow
 from agent_composer.nodes.agent import AgentNode
 from agent_composer.nodes.code import CodeNode
-from agent_composer.nodes.if_else import IfElseNode
+from agent_composer.nodes.case import CaseNode
 from agent_composer.nodes.model import ModelNode
 from agent_composer.state.segments import SegmentType
 from agent_composer.compose import LoadedFlow, LoadError, load_flow
@@ -78,15 +78,15 @@ def test_seed_loads_to_loaded_flow(seed):
 
 
 # --------------------------------------------------------------------------- #
-# seed 02 — case desugar: IfElseNode gate + control edges + coalesce flow-output
+# seed 02 — case desugar: CaseNode gate + control edges + coalesce flow-output
 # --------------------------------------------------------------------------- #
 
 
-def test_seed02_gate_is_if_else_with_control_edges():
+def test_seed02_gate_is_case_with_control_edges():
     loaded = _load("02")
     flow = loaded.compiled
     gate = flow.nodes["gate"]
-    assert isinstance(gate, IfElseNode)
+    assert isinstance(gate, CaseNode)
     # gate -> positive / gate -> cautious control edges (the then/else targets).
     out = {(e.to, e.source_handle) for e in flow.outgoing("gate")}
     assert ("positive", "positive") in out
@@ -199,7 +199,7 @@ def test_seed18_synth_carries_view_record():
 def test_seed18_route_desugars_case_on_with_else():
     flow = _load("18").compiled
     route = flow.nodes["route"]
-    assert isinstance(route, IfElseNode)
+    assert isinstance(route, CaseNode)
     # on-form: one __on param wired to the stance ref (the source lives on flow.wiring).
     assert [p.name for p in route.params] == ["__on"]
     assert flow.wiring["route"] == {"__on": "${synth.output.stance}"}

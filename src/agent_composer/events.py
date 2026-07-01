@@ -82,7 +82,7 @@ class NodeSucceeded:
 
     node_id: str
     output: Any = None  # the node's single produced value
-    # IF_ELSE routing: which case handle was selected ("default" = fallback).
+    # CASE routing: which case handle was selected ("default" = fallback).
     edge_source_handle: Optional[str] = None
 
 

@@ -49,7 +49,7 @@ def _all_edges(seed: str):
     """Data edges reconciled with the case desugars' control edges.
 
     Returns (node_ids, edges) — `node_ids` is the runtime node-id set (case nodes
-    desugar to an IfElseNode under the SAME id), `edges` is every real-node edge.
+    desugar to an CaseNode under the SAME id), `edges` is every real-node edge.
     """
     _p = (_SEEDS / seed) if (_SEEDS / seed).exists() else (_SEEDS / "_future" / seed)
     f = parse_file(_p.read_text())
@@ -67,7 +67,7 @@ def _all_edges(seed: str):
         if isinstance(d, CaseDescriptor)
     }
     edges = reconcile_case_edges(data_edges, desugars)
-    node_ids = set(descriptors)  # case node id == its desugared IfElseNode id
+    node_ids = set(descriptors)  # case node id == its desugared CaseNode id
     return node_ids, edges, f
 
 

@@ -1,12 +1,12 @@
-"""The `case` desugar: a `case` node -> a strict `IfElseNode`.
+"""The `case` desugar: a `case` node -> a strict `CaseNode`.
 
 Pattern-match compilation, the OCaml analogue of lowering `match e with | p -> e1
 | _ -> e2` to nested conditionals. A `case` node carries no inputs and no built leaf
-Node; this pass lowers it to the existing strict `IfElseNode` plus the control + data
+Node; this pass lowers it to the existing strict `CaseNode` plus the control + data
 edges — with NO new `NodeKind`. Two surface forms:
 
 - **searched** (`cases: [{when: "<bool>", then: <t>}]`, `else: <e>`): scan each `when:`
-  for its distinct `${...}` refs -> allocate one `IfElseNode` input `__rN` per distinct
+  for its distinct `${...}` refs -> allocate one `CaseNode` input `__rN` per distinct
   ref (`source` = the original `${ref}`) -> rewrite the `when:` to the bare local
   `${__rN}`. Each case routes to its `then:` (the edge handle); `else:` routes to the
   shipped internal `default` handle (the surface key is `else:`).
@@ -15,7 +15,7 @@ edges — with NO new `NodeKind`. Two surface forms:
   `__on = ${ref}`; each `when: <value>` becomes `${__on} == "<value>"`.
 
 Because the desugared `when:`s interpolate ONLY the node-local `__rN`/`__on` names, the
-strict `IfElseNode` evaluates them via the EXISTING `evaluate_when_record` against its
+strict `CaseNode` evaluates them via the EXISTING `evaluate_when_record` against its
 bound input record — no new evaluator, and the strict declared-input check
 accepts them (the `__rN`/`__on` ARE the declared inputs).
 
@@ -28,7 +28,7 @@ resolves through the producing node's `output_shape` (walking dotted fields into
 to reach a `Shape` with `.tags`) — every tag must be covered by a case `when:` value OR a
 present `else:`. A missing tag with no `else:` is a `LoadError`.
 
-Imports flow down/peer only: `expr` (ref scan), `nodes` (Case/IfElseNode/ParamDecl),
+Imports flow down/peer only: `expr` (ref scan), `nodes` (Case/CaseNode/ParamDecl),
 `compile.model` (Edge) + `compile.validation._walk_record_fields` (the dotted-field walk,
 a representation-neutral leaf checker), `state` (Shape), and the compose peers
 `compose.calls` (the shared binding-walk, for `expand_case_outputs`), `compose.errors`,
@@ -51,7 +51,7 @@ from agent_composer.expr import (
     parse_binding,
 )
 from agent_composer.nodes.binding import ParamDecl
-from agent_composer.nodes.if_else import DEFAULT_HANDLE, Case, IfElseNode
+from agent_composer.nodes.case import DEFAULT_HANDLE, Case, CaseNode
 from agent_composer.state.segments import Shape
 from agent_composer.compose.calls import (
     _to_call_descriptor,
@@ -69,15 +69,15 @@ _REF_SPAN = re.compile(r"\$\{([^}]+)\}")
 
 @dataclass(frozen=True)
 class CaseDesugar:
-    """The lowering of one `case` node: the gate `IfElseNode` + its edges.
+    """The lowering of one `case` node: the gate `CaseNode` + its edges.
 
-    `node` is the desugared `IfElseNode` (its `.params` = the `__rN`/`__on` names). `wiring` is the
+    `node` is the desugared `CaseNode` (its `.params` = the `__rN`/`__on` names). `wiring` is the
     flow-owned `{__rN|__on -> source}` map (the gate's sources live on `CompiledFlow.wiring`).
     `data_edges` are the reconciled input edges (proper `__rN`/`__on` `input_group`);
     `control_edges` are the `gate -> <then|else target>` edges.
     """
 
-    node: IfElseNode
+    node: CaseNode
     wiring: dict[str, Any]
     data_edges: list[Edge]
     control_edges: list[Edge]
@@ -234,7 +234,7 @@ def _check_exhaustive(
 
 
 def desugar_case(desc: CaseDescriptor, producers: dict[str, Shape]) -> CaseDesugar:
-    """Lower one `case` descriptor to a strict `IfElseNode` + control + data edges.
+    """Lower one `case` descriptor to a strict `CaseNode` + control + data edges.
 
     `producers` maps producer-node id -> its `output_shape` (for `on:` enum
     exhaustiveness). Raises `LoadError` on a malformed case or a non-exhaustive enum.
@@ -270,7 +270,7 @@ def _desugar_on(desc: CaseDescriptor) -> CaseDesugar:
         handle_targets.append((then, then))
     if desc.else_ is not None:
         handle_targets.append((DEFAULT_HANDLE, desc.else_))
-    node = IfElseNode(desc.id, cases, title=desc.node_name)
+    node = CaseNode(desc.id, cases, title=desc.node_name)
     node.params = [ParamDecl(name="__on")]
     wiring = {"__on": desc.on}
     return CaseDesugar(
@@ -310,7 +310,7 @@ def _desugar_searched(desc: CaseDescriptor) -> CaseDesugar:
     if desc.else_ is not None:
         handle_targets.append((DEFAULT_HANDLE, desc.else_))
 
-    node = IfElseNode(desc.id, cases, title=desc.node_name)
+    node = CaseNode(desc.id, cases, title=desc.node_name)
     node.params = [ParamDecl(name=local) for local in ref_to_local.values()]
     return CaseDesugar(
         node=node,
@@ -356,7 +356,7 @@ def reconcile_case_edges(
 # A `case` branch may route to a FRESH owned call instead of a placed node id:
 # `then: ${ take(stance="pro") }` (and `else:` symmetric). It desugars to a synth
 # `__call_<n>` node (the same machinery as an inline-binding call); the then:/else:
-# target is rewritten to that synth id (which is then both the IfElseNode handle and
+# target is rewritten to that synth id (which is then both the CaseNode handle and
 # the control-edge target, exactly like a plain `then: id`). Accepted grammar: a
 # SINGLE bare whole-span `${call}` — a route target resolves to exactly one node id, so
 # a coalesce / embedded text / dotted call is a located LoadError. Sound because the

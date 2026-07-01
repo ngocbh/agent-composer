@@ -8,7 +8,7 @@ one.
 This is GREEN on first run by construction. If a later change legitimately changes the
 topology, update the literals here in the same commit and explain why.
 
-Coverage across the three seeds: data edges, IF_ELSE/case control edges + skip-flood targets,
+Coverage across the three seeds: data edges, CASE/case control edges + skip-flood targets,
 synthesized root (`__start__->`) + terminal (`->__end__#0`) edges, the ordering separator (`~>`),
 and a mapped `call` (MAP) node. REF/MAP child-message byte-identity is guarded by the existing
 lock-in tests (test_ref_run / test_map / test_ref_map); the format constants are recorded here for
@@ -58,7 +58,7 @@ GOLDEN_EDGE_IDS: dict[str, list[str]] = {
         "research_each->__end__#0",
         "research_each->compare#0",
     ],
-    # human_input + timed WAIT: IF_ELSE gate control edges + the `~>` ordering separator
+    # human_input + timed WAIT: CASE gate control edges + the `~>` ordering separator
     "17-effects-human-wait.yaml": [
         "__start__->propose#0",
         "__start__->settle#0",

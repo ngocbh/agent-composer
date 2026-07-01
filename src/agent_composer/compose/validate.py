@@ -4,7 +4,7 @@ Reuses the representation-neutral leaf checkers from `compile.validation` —
 `_reject_cycles` (the Kahn cycle check), `_classify_path` (e01 head-resolution + e03
 dotted-field dispatch) — on the synthesized graph + built nodes, re-raising as a
 `LoadError` so the surface speaks one error type. The handle-alignment check ports
-`_check_if_else_handles`'s rule to the desugared `IfElseNode`s + their control edges (the
+`_check_case_handles`'s rule to the desugared `CaseNode`s + their control edges (the
 Compose path has no `FlowSpec`).
 
 Reference-wiring (`validate_references`) runs the leaf checkers over every
@@ -16,13 +16,13 @@ mirror the legacy `_collect_reference_errors`:
 - **Prompt scope**: an AGENT prompt may interpolate ONLY this node's declared
   inputs as bare `${name}`; a `${<id>.output}`/`${input.X}`/`${system.X}` in a prompt is a
   located error.
-- **Case node-local refs**: the desugared IF_ELSE `when:` strings use `${__rN}`/`${__on}`,
+- **Case node-local refs**: the desugared CASE `when:` strings use `${__rN}`/`${__on}`,
   which resolve against the bound input record — they are EXCLUDED from `_classify_path`
   (only the `__rN`/`__on` SOURCES are classified, against the pool; mirrors the strict
-  IF_ELSE declared-input check).
+  CASE declared-input check).
 
 Imports flow down only: `compile.model` (Edge), `compile.validation` (the leaf cycle +
-ref checkers), `expr` (the binding parser), `nodes` (Node/IfElseNode/AgentNode discrimination).
+ref checkers), `expr` (the binding parser), `nodes` (Node/CaseNode/AgentNode discrimination).
 Nothing imports this back.
 """
 
@@ -50,7 +50,7 @@ from agent_composer.expr import (
 from agent_composer.expr.expressions import _PARSER
 from agent_composer.nodes.agent import AgentNode
 from agent_composer.nodes.base import Node, NodeKind
-from agent_composer.nodes.if_else import DEFAULT_HANDLE, IfElseNode
+from agent_composer.nodes.case import DEFAULT_HANDLE, CaseNode
 from agent_composer.nodes.wait import WaitNode
 from agent_composer.state.segments import SegmentType, Shape
 from agent_composer.compose.errors import LoadError
@@ -145,17 +145,17 @@ def _stuck_nodes(edges: list[Edge], node_ids: "set[str]") -> list[str]:
     return sorted(nid for nid in node_ids if in_degree[nid] > 0)
 
 
-def check_if_else_handles(nodes: dict[str, Node], edges: list[Edge]) -> None:
-    """Every desugared `IfElseNode`'s handles align with its outgoing control edges.
+def check_case_handles(nodes: dict[str, Node], edges: list[Edge]) -> None:
+    """Every desugared `CaseNode`'s handles align with its outgoing control edges.
 
-    Mirrors `compile.validation._check_if_else_handles`: each outgoing edge's handle
+    Mirrors `compile.validation._check_case_handles`: each outgoing edge's handle
     (defaulting to `default`) must be a declared case handle or `default`, and every
     declared case must have an outgoing edge. The `case` desugar emits the
-    `gate -> <then|else>` control edges and the `IfElseNode.cases`; this pins them
+    `gate -> <then|else>` control edges and the `CaseNode.cases`; this pins them
     consistent. Raises `LoadError` on the first misalignment.
     """
     for node_id, node in nodes.items():
-        if not isinstance(node, IfElseNode):
+        if not isinstance(node, CaseNode):
             continue
         case_handles = {c.handle for c in node.cases}
         out_handles = {
@@ -210,7 +210,7 @@ def validate_references(
 ) -> None:
     """Validate every `${...}` reference site of a built flow.
 
-    `nodes` is the built node map — leaf runtime `Node`s AND desugared `IfElseNode`s
+    `nodes` is the built node map — leaf runtime `Node`s AND desugared `CaseNode`s
     (their `.inputs` carry the `__rN`/`__on` SOURCES, the reconciled `case` data refs).
     `flow_inputs` is the `read_flow_inputs(...)` decl names (the `${input.X}` set);
     `producers` maps node id -> its `output_shape` (drives the e03 dotted-field walk;
@@ -296,7 +296,7 @@ def validate_references(
         if isinstance(node, WaitNode):
             continue  # a timed WAIT's `until` is out of ref-validation scope (as today)
         # Each node input `from:` source, read from the flow-owned wiring. For a
-        # desugared IF_ELSE these are the `__rN`/`__on` SOURCES (the original
+        # desugared CASE these are the `__rN`/`__on` SOURCES (the original
         # `${<id>.output}` refs) — validated against the pool. The rewritten node-local
         # `${__rN}`/`${__on}` live in `node.cases` `when:` and are EXCLUDED here
         # (they resolve against the record).

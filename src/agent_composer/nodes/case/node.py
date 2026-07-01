@@ -1,11 +1,11 @@
-"""IF_ELSE — deterministic conditional routing.
+"""CASE — deterministic conditional routing.
 
 Strict (a pure function of its declared inputs): the node declares `inputs` (bound
 via `from:` like any leaf), and each case's `when:` interpolates only those inputs
 as bare `${name}`, evaluated against the **bound input record**, not the pool.
 Routing is purely deterministic: the engine makes no LLM decision here. To branch
 on a judgment, an upstream node produces a variable (e.g. a classifier AGENT
-writing a label, or a CODE node a number) which the IF_ELSE binds as an input and
+writing a label, or a CODE node a number) which the CASE binds as an input and
 the case compares. Cases are tried in order; the first truthy one wins. If none
 match, the reserved `"default"` handle is taken.
 
@@ -30,7 +30,7 @@ class Case:
     when: Optional[str] = None
 
 
-class IfElseNode(Node):
+class CaseNode(Node):
     """
     Deterministic conditional routing — no LLM decision.
 
@@ -48,7 +48,7 @@ class IfElseNode(Node):
             Display title.
     """
 
-    kind = NodeKind.IF_ELSE
+    kind = NodeKind.CASE
 
     def __init__(
         self,
@@ -61,7 +61,7 @@ class IfElseNode(Node):
         self.cases = cases
 
     def run(self, inputs: dict) -> Output:
-        # Strict IF_ELSE: route on the bound input record only — each `when:`
+        # Strict CASE: route on the bound input record only — each `when:`
         # interpolates this node's declared inputs as bare `${name}`, not the pool.
         # Routing-only: the value stays None; `handle` carries the chosen case.
         for case in self.cases:

@@ -29,7 +29,7 @@ state/        typed value system (segments) + variable pool              [leaf, 
 events.py     run + node event vocabulary
 expr/         ${...} resolution + when: evaluator on the typed pool
 nodes/        Node contract (base) + per-kind implementations
-              (start, end, agent, code, model, tool, if_else, call, map,
+              (start, end, agent, code, model, tool, case, call, map,
                human_input, wait)
 compile/      compiled IR (CompiledFlow) + representation-neutral validation
 compose/      the Compose-YAML loader: text -> CompiledFlow

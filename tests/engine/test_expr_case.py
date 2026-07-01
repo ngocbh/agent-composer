@@ -1,4 +1,4 @@
-"""Unit tests for the expression evaluator + the real IF_ELSE node."""
+"""Unit tests for the expression evaluator + the real CASE node."""
 
 import pytest
 
@@ -10,7 +10,7 @@ from agent_composer.expr.expressions import (
 )
 from agent_composer.compile.model import END_ID, START_ID, Edge, CompiledFlow
 from agent_composer.nodes.end import EndNode
-from agent_composer.nodes.if_else import Case, IfElseNode
+from agent_composer.nodes.case import Case, CaseNode
 from agent_composer.nodes.start import StartNode
 from agent_composer.runtime.engine import FlowEngine
 from agent_composer.state.pool import TypedVariablePool
@@ -98,7 +98,7 @@ def test_when_arithmetic_non_numeric_raises():
 
 
 def test_when_arithmetic_in_record_path():
-    # the same grammar serves the strict-IF_ELSE record path
+    # the same grammar serves the strict-CASE record path
     from agent_composer.expr.expressions import evaluate_when_record
 
     assert evaluate_when_record("${a} * ${b} >= 10", {"a": 4, "b": 3}) is True
@@ -192,7 +192,7 @@ def test_render_record_falsy_present_values_render():
     assert render_template_record("w=${w} flag=${s.on} n='${name}'", rec) == "w=0 flag=False n=''"
 
 
-# --- evaluate_when_record (strict-IF_ELSE when:; slice 8) ------------------- #
+# --- evaluate_when_record (strict-CASE when:; slice 8) ------------------- #
 
 
 def test_evaluate_when_record_resolves_declared_inputs():
@@ -228,17 +228,17 @@ def test_evaluate_when_record_in_with_none_operand_raises():
         evaluate_when_record("${x} not in 'abc'", {})
 
 
-# --- IF_ELSE node end-to-end through the engine ----------------------------- #
+# --- CASE node end-to-end through the engine ----------------------------- #
 
 
 def _branch_graph(cases):
-    # Strict IF_ELSE: the router declares `score` (bound from the upstream node) and
-    # routes on the bare `${score}`. IfElseNode gets its inputs via the base attribute
+    # Strict CASE: the router declares `score` (bound from the upstream node) and
+    # routes on the bare `${score}`. CaseNode gets its inputs via the base attribute
     # the compiler threads — here set post-construction (no compiler in this unit test).
     # `.output` is a SKIP token; the upstream FuncNode emits the scalar value
     # directly, and `${score.output}` reads `pool.store["score"]` unwrapped.
     log: list = []
-    cond = IfElseNode("cond", cases)
+    cond = CaseNode("cond", cases)
     stamp_reads(cond, {"score": "${score.output}"})
     nodes = [
         FuncNode("score", lambda p: 0.8),
@@ -258,23 +258,23 @@ def _branch_graph(cases):
     return CompiledFlow.from_parts(_with_boundary(node_map), edges, wiring=derive_wiring(node_map)), log
 
 
-def test_if_else_when_routes_high():
+def test_case_when_routes_high():
     g, log = _branch_graph([Case(handle="is_high", when="${score} >= 0.7")])
     list(FlowEngine(g).run())
     assert log == ["high"]
 
 
-def test_if_else_when_routes_default():
+def test_case_when_routes_default():
     g, log = _branch_graph([Case(handle="is_high", when="${score} >= 0.9")])
     list(FlowEngine(g).run())
     assert log == ["low"]
 
 
-def test_if_else_string_equality_routes():
+def test_case_string_equality_routes():
     # The canonical pattern: an upstream node writes a label; the router declares it as
     # an input and does a pure string comparison on the bare `${label}`.
     log: list = []
-    cond = IfElseNode("cond", [Case(handle="is_high", when="${label} == 'POSITIVE'")])
+    cond = CaseNode("cond", [Case(handle="is_high", when="${label} == 'POSITIVE'")])
     stamp_reads(cond, {"label": "${label.output}"})
     nodes = [
         FuncNode("label", lambda p: "POSITIVE"),
@@ -296,7 +296,7 @@ def test_if_else_string_equality_routes():
     assert log == ["high"]
 
 
-def test_if_else_case_without_when_errors():
+def test_case_case_without_when_errors():
     g = _branch_graph([Case(handle="is_high")])[0]  # no `when`
     events = list(FlowEngine(g).run())
     # the node raises -> the run fails (not a silent misroute)

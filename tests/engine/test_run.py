@@ -150,7 +150,7 @@ def test_coalesce_output_resolves_taken_branch_positive():
 
 
 def test_case_gate_binds_from_flow_wiring():
-    # a case's desugared IfElseNode binds its __rN inputs from
+    # a case's desugared CaseNode binds its __rN inputs from
     # flow.wiring (the sources relocated off the node); the gate carries only param names.
     loaded = load_flow(_CASE_FLOW)
     assert loaded.compiled.wiring["gate"] == {"__r0": "${score.output}"}

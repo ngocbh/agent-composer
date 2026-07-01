@@ -2,7 +2,7 @@
 
 The headline payoff of the wiring relocation: `CompiledFlow.wiring` is the
 SOLE owner of input *bindable* sources. A node carries only its signature (`params`) + its logic
-— an AGENT prompt / IF_ELSE `when` reference bare `${param}` names, never a pool ref. This walks
+— an AGENT prompt / CASE `when` reference bare `${param}` names, never a pool ref. This walks
 every representative seed's nodes (recursing into baked `call`/`map` child flows) and asserts no
 node-held string is a pool-ref source (`${outputs|inputs|system|item ...}`); a stray leaf source
 or a `WaitNode.until` left on a node would trip it. Sources live only on `flow.wiring` (and the

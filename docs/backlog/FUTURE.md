@@ -16,7 +16,7 @@ This directory (`docs/backlog/`) is tracked in git and published in the doc site
   Child-engine drivers reusing the `MAP` `over`/`${item}` machinery + a carried-state accumulator.
   The until-condition `LOOP` also needs the in-iteration suspension story (host resume seam + parallel
   resume).
-- **`WATCH` predefined composite** — TOOL + IF_ELSE + WAIT + loop, run via `call`, shown as one
+- **`WATCH` predefined composite** — TOOL + CASE + WAIT + loop, run via `call`, shown as one
   collapsed node. Needs cyclic-graph validation + engine-level re-enqueue (the watch-loop) and an
   unauthorable `EventAwaited` pause reason.
 - **Cyclic-graph validation + engine re-enqueue** — prerequisite for the WATCH watch-loop.

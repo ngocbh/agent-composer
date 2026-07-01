@@ -74,7 +74,7 @@ from agent_composer.compose.parser import (
 )
 from agent_composer.compose.shapes import InputDecl, read_flow_inputs
 from agent_composer.compose.validate import (
-    check_if_else_handles,
+    check_case_handles,
     reject_cycles,
     validate_human_questions,
     validate_node_asserts,
@@ -702,7 +702,7 @@ def _assemble(
     flow_input_shapes = {decl.name: decl.shape for decl in inputs}
     check_ref_map_types(leaf, producers, flow_input_shapes, flow_wiring, n_lines)
 
-    # Desugar each `case` to an IfElseNode + its data/control edges.
+    # Desugar each `case` to an CaseNode + its data/control edges.
     desugars: dict[str, CaseDesugar] = {}
     for nid, desc in descriptors.items():
         if not isinstance(desc, CaseDescriptor):
@@ -717,7 +717,7 @@ def _assemble(
     nodes: dict[str, Node] = dict(leaf)
     for nid, desugar in desugars.items():
         nodes[nid] = desugar.node
-        flow_wiring[nid] = desugar.wiring  # case (IfElseNode) wiring relocated to the flow
+        flow_wiring[nid] = desugar.wiring  # case (CaseNode) wiring relocated to the flow
 
     # flow.wiring/params key parity over EVERY node (catches an orphan/
     # missing source or a node absent from the wiring). Runs once the wiring is complete.
@@ -771,7 +771,7 @@ def _assemble(
     # A cycle spans nodes; anchor the error on the first stuck node's line. START_ID/END_ID are
     # acyclic by construction (START_ID has no incoming, END_ID no outgoing).
     reject_cycles(edges, node_ids, n_lines)
-    check_if_else_handles(nodes, edges)
+    check_case_handles(nodes, edges)
 
     compiled = CompiledFlow.from_parts(nodes, edges, outputs=flow_outputs, wiring=flow_wiring,
                                        flow_llm_config=flow_llm_config or {})

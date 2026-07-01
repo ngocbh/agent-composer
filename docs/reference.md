@@ -71,9 +71,9 @@ synthesizes.
 
 ::: agent_composer.nodes.tool.node.ToolNode
 
-::: agent_composer.nodes.if_else.node.IfElseNode
+::: agent_composer.nodes.case.node.CaseNode
 
-::: agent_composer.nodes.if_else.node.Case
+::: agent_composer.nodes.case.node.Case
 
 ::: agent_composer.nodes.human_input.node.HumanInputNode
 

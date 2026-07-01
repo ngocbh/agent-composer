@@ -46,7 +46,7 @@ from agent_composer.compose.parser import (
 )
 from agent_composer.compose.shapes import InputDecl, read_flow_inputs, read_shape
 from agent_composer.compose.validate import (
-    check_if_else_handles,
+    check_case_handles,
     reject_cycles,
     validate_references,
 )
@@ -80,7 +80,7 @@ __all__ = [
     "CaseDesugar",
     "expand_case_outputs",
     "reconcile_case_edges",
-    "check_if_else_handles",
+    "check_case_handles",
     "reject_cycles",
     "validate_references",
     "desugar_inline_calls",

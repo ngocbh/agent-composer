@@ -1,10 +1,10 @@
-"""Unit tests for the `case` desugar -> strict `IfElseNode`.
+"""Unit tests for the `case` desugar -> strict `CaseNode`.
 
 A `case` node carries no inputs and no built leaf Node; `desugar_case` lowers it to
-a strict `IfElseNode` plus control + data edges, with NO new NodeKind:
+a strict `CaseNode` plus control + data edges, with NO new NodeKind:
 
 - **searched** (`cases: [{when: "<bool>", then: <t>}]`, `else: <e>`): each distinct
-  `${...}` ref across the `when:`s -> one `IfElseNode` input `__rN`
+  `${...}` ref across the `when:`s -> one `CaseNode` input `__rN`
   (`source=<original ref>`); the `when:` is rewritten to bare `${__rN}`; control
   edges `gate->then(source_handle=then)` + `gate->else(source_handle="default")`;
   the data edges carry the `__rN` `input_group` (reconciling the data-edge pass's provisional).
@@ -13,7 +13,7 @@ a strict `IfElseNode` plus control + data edges, with NO new NodeKind:
 - **exhaustiveness**: when `on:` names an ENUM producer (the dotted ref resolves to a
   `Shape` with `.tags`), every tag must be covered by a case OR a present `else:`.
 
-The desugared `IfElseNode.when`s evaluate via the EXISTING `evaluate_when_record`.
+The desugared `CaseNode.when`s evaluate via the EXISTING `evaluate_when_record`.
 """
 
 from pathlib import Path
@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from agent_composer.expr.expressions import evaluate_when_record
-from agent_composer.nodes.if_else import DEFAULT_HANDLE, IfElseNode
+from agent_composer.nodes.case import DEFAULT_HANDLE, CaseNode
 from agent_composer.state.segments import SegmentType, Shape
 from agent_composer.compose.build import build_leaf_node, infer_data_edges
 from agent_composer.compose.cases import desugar_case, reconcile_case_edges
@@ -53,12 +53,12 @@ def _case_desc(seed: str, node_id: str) -> CaseDescriptor:
 # --------------------------------------------------------------------------- #
 
 
-def test_searched_desugar_builds_if_else():
+def test_searched_desugar_builds_case():
     # seed 02: when "${score.output} >= 0.5" then positive, else cautious.
     desc = _case_desc("02-case.yaml", "gate")
     result = desugar_case(desc, {})
     node = result.node
-    assert isinstance(node, IfElseNode)
+    assert isinstance(node, CaseNode)
     assert node.id == "gate"
     # one distinct ref -> one param __r0, wired to ${score.output}.
     assert [p.name for p in node.params] == ["__r0"]
@@ -104,7 +104,7 @@ def test_searched_multiref_allocates_r0_r1():
 # --------------------------------------------------------------------------- #
 
 
-def test_on_desugar_builds_if_else():
+def test_on_desugar_builds_case():
     # seed 06: on ${classify.output}; when pro/con/mixed.
     desc = _case_desc("06-case-on.yaml", "route")
     result = desugar_case(desc, {})
@@ -191,7 +191,7 @@ def test_exhaustiveness_else_satisfies_coverage():
         tags=["pro", "con", "mixed"], cases=["pro", "con"], else_="neutral_note"
     )
     result = desugar_case(desc, producers)  # no raise
-    assert isinstance(result.node, IfElseNode)
+    assert isinstance(result.node, CaseNode)
 
 
 def test_exhaustiveness_all_tags_covered_no_else_ok():
@@ -199,7 +199,7 @@ def test_exhaustiveness_all_tags_covered_no_else_ok():
         tags=["pro", "con"], cases=["pro", "con"], else_=None
     )
     result = desugar_case(desc, producers)  # no raise
-    assert isinstance(result.node, IfElseNode)
+    assert isinstance(result.node, CaseNode)
 
 
 def test_exhaustiveness_walks_dotted_field_into_record():
@@ -223,7 +223,7 @@ def test_exhaustiveness_walks_dotted_field_into_record():
         else_="neutral_note",
     )
     result = desugar_case(desc, {"synth": view})  # else: covers `neutral` -> ok
-    assert isinstance(result.node, IfElseNode)
+    assert isinstance(result.node, CaseNode)
 
 
 def test_exhaustiveness_dotted_missing_tag_raises():
@@ -258,11 +258,11 @@ def test_on_non_enum_producer_skips_exhaustiveness():
     # on: a plain scalar producer (no .tags) -> lenient, no exhaustiveness, no raise.
     desc = _case_desc("06-case-on.yaml", "route")
     result = desugar_case(desc, {"classify": Shape.scalar(SegmentType.STRING)})
-    assert isinstance(result.node, IfElseNode)
+    assert isinstance(result.node, CaseNode)
 
 
 # --------------------------------------------------------------------------- #
-# the desugared IF_ELSE passes handle alignment (every case has an edge)
+# the desugared CASE passes handle alignment (every case has an edge)
 # --------------------------------------------------------------------------- #
 
 

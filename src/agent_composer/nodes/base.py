@@ -36,7 +36,7 @@ class NodeKind(str, Enum):
     CODE = "code"
     MODEL = "model"
     TOOL = "tool"
-    IF_ELSE = "if_else"
+    CASE = "case"
     HUMAN_INPUT = "human_input"  # suspend for a person
     WAIT = "wait"  # internal-only: suspend for an external poke (WATCH uses it)
     LOOP = "loop"  # reserved
@@ -52,7 +52,7 @@ class NodeKind(str, Enum):
 
 @dataclass(frozen=True)
 class Output:
-    """A produced value. `handle` is set ONLY by IF_ELSE-style routing (the chosen case);
+    """A produced value. `handle` is set ONLY by CASE-style routing (the chosen case);
     every other kind leaves it None. The engine writes `value` into the pool under the node id
     and maps `handle` onto `NodeSucceeded.edge_source_handle`."""
 

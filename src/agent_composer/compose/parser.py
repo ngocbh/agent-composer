@@ -355,7 +355,7 @@ class CaseDescriptor:
     """kind=case — branch routing (searched `when:` or `on:`-value form).
 
     A `case` routes only — it carries NO `inputs:` (the desugar maps it
-    onto the inputs-bearing `IfElseNode`). `else_` is the `else:` fallback.
+    onto the inputs-bearing `CaseNode`). `else_` is the `else:` fallback.
     """
 
     id: str

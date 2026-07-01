@@ -802,7 +802,7 @@ def render_template_record(text: str, record: dict) -> str:
     named `expr.builtins.TEMPLATE_FNS` formatter over its resolved args. Bare local-input
     refs only — the pool namespaces (`node`/`system`) are not in scope.
 
-    Unlike `evaluate_when_record` (strict IF_ELSE), which returns `None`->falsy on a
+    Unlike `evaluate_when_record` (strict CASE), which returns `None`->falsy on a
     dotted miss, this renderer RAISES — the locked strict-prompt floor.
 
     Args:

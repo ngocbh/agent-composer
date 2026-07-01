@@ -333,7 +333,7 @@ def infer_data_edges(
 
     `flow_wiring[node_id]` is the `{param -> source}` map (a timed WAIT carries its `until`, a
     MAP its `over`, under the reserved keys). `descriptors` supplies the CASE `on:`/`when:` refs
-    (a `case` desugars to an `IfElseNode`, which reconciles these provisional groups
+    (a `case` desugars to an `CaseNode`, which reconciles these provisional groups
     to its `__rN`/`__on` names).
     """
     edges: list[Edge] = []
@@ -360,7 +360,7 @@ def infer_data_edges(
 
     for node_id, desc in descriptors.items():
         if isinstance(desc, CaseDescriptor):
-            # case has no built node (the IfElseNode is built later). Its data refs
+            # case has no built node (the CaseNode is built later). Its data refs
             # live in `on:` + each `when:`. Provisional per-ref groups (`<case>:<n>`)
             # — the case desugar reconciles to `__on`/`__rN`. The edge EXISTENCE is the
             # invariant this pass must satisfy (so `score -> gate` is inferred).

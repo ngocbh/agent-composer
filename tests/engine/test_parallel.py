@@ -61,7 +61,7 @@ def test_diamond_join_once_under_workers():
     assert log.count("d") == 1  # exact-once join held under concurrency
 
 
-def test_if_else_skip_under_workers():
+def test_case_skip_under_workers():
     log: list = []
     g = _graph(
         [BranchNode("cond", "yes"), RecordNode("b", log), RecordNode("c", log)],

@@ -2,7 +2,7 @@
 
 `validate_references` runs the reused leaf checkers (`compile.validation._classify_path`
 + `_walk_record_fields`) over every binding site of a built flow — node input
-`from:` bindings, the flow `outputs:` bindings, and (via the DESUGARED `IfElseNode.inputs`)
+`from:` bindings, the flow `outputs:` bindings, and (via the DESUGARED `CaseNode.inputs`)
 each `case`'s `on:`/`when:` data refs. It accumulates ALL located errors and raises a
 single `LoadError`. Three loud mechanisms are pinned:
 
@@ -13,7 +13,7 @@ single `LoadError`. Three loud mechanisms are pinned:
   bare declared input -> loud.
 
 A clean flow (seed 01) passes. Case data-refs are validated from the desugared
-`IfElseNode.inputs` (the `__rN`/`__on` sources, e.g. a dangling `${typo.output}`); the
+`CaseNode.inputs` (the `__rN`/`__on` sources, e.g. a dangling `${typo.output}`); the
 rewritten node-local `${__rN}`/`${__on}` are EXCLUDED from `_classify_path`.
 """
 
@@ -146,7 +146,7 @@ def test_prompt_l1_declared_input_passes():
 
 
 # --------------------------------------------------------------------------- #
-# case data-refs validated from the DESUGARED IfElseNode.inputs
+# case data-refs validated from the DESUGARED CaseNode.inputs
 # --------------------------------------------------------------------------- #
 
 
