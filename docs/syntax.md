@@ -393,11 +393,12 @@ turn:
   **names** at build, field **types** at load.
 - **`while:`** is a **pre-check** predicate evaluated on the carried record before
   each iteration (0 iterations run if the seed already fails it). It is a
-  record-scoped boolean over bare `${name}` refs — and, like every condition,
-  **`not` sits OUTSIDE the `${...}` span**: write `while: not ${exited}`, never
-  `while: ${not exited}`.
-- **`max:`** is a **required** runaway guard (must be `>= 1`): if the loop would run
-  more than `max` iterations the run fails loudly (`LoopMaxExceeded`).
+  record-scoped boolean over bare `${name}` refs — every ref must name a **carried
+  record field** (a typo'd name is rejected at load, not silently read as falsy) —
+  and, like every condition, **`not` sits OUTSIDE the `${...}` span**: write
+  `while: not ${exited}`, never `while: ${not exited}`.
+- **`max:`** is a **required** runaway guard — a plain integer `>= 1`: if the loop
+  would run more than `max` iterations the run fails loudly (`LoopMaxExceeded`).
 
 The node's value is the final carried record (committed under the loop node's id
 once the predicate goes false).

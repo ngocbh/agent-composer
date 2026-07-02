@@ -140,7 +140,9 @@ the loop a chat REPL — run/resume threads each turn. See `loop.yaml`. Slice 1 
 - **`loop` bodies must be `'a -> 'a`.** The body's `output:` shape must EQUAL the
   loop's `input:` (carried record) and read only a subset of its names — checked at
   build (names) and load (types). `while:`/`max:` are required in this slice;
-  `until:`/`times:` parse but raise "not supported" at load.
+  `until:`/`times:` parse but raise "not supported" at load. Every `while:` ref must
+  name a carried field (a typo is rejected at load, not read as falsy), and `max:`
+  must be a plain integer `>= 1`.
 - **Node-local `asserts:` reading `${output}` are POST checks** — they fire once the
   node's value is committed, and fail the run loudly on a false/raising expr. This
   includes a `call` node: its POST asserts may read `${output}` **and** the call's

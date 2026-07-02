@@ -17,6 +17,7 @@ CASE desugar, REF/MAP build happen elsewhere — only leaf kinds here.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Optional
 
@@ -795,6 +796,12 @@ def build_loop_node(desc: LoopDescriptor, resolver: ChildResolver) -> tuple[Node
         errors.append(f"loop node {desc.id!r}: slice requires `while:`")
     if desc.max is None:
         errors.append(f"loop node {desc.id!r}: `max:` is required (runaway guard)")
+    elif not isinstance(desc.max, int) or isinstance(desc.max, bool):
+        # `max:` bounds the iteration COUNT, so it must be a plain integer. The descriptor is a
+        # bare dataclass (its `Optional[int]` annotation isn't enforced), so a YAML string/float
+        # passes through and would blow up the `< 1` compare or the runtime guard, and a YAML
+        # bool (an int subclass in Python) would silently read as 0/1. Reject any non-int type.
+        errors.append(f"loop node {desc.id!r}: `max:` must be an integer (got {desc.max!r})")
     elif desc.max < 1:
         # A runaway guard below 1 is nonsensical: the guard bounds the iteration COUNT, so it
         # must permit at least one body run. Reject at the boundary rather than letting `max: 0`
@@ -825,6 +832,18 @@ def build_loop_node(desc: LoopDescriptor, resolver: ChildResolver) -> tuple[Node
             f"loop node {desc.id!r}: body input(s) {sorted(extra)} are not carried record "
             f"fields {sorted(carried)} (the body reads a subset of the carried record)"
         )
+    # `while:` predicate scope: the predicate is evaluated against the carried record
+    # (record-scoped `evaluate_when_record`), where the ONLY resolvable names are the carried
+    # keys — an undeclared name silently resolves falsy and spins the loop to `max`. Reject a
+    # predicate whose ref head isn't a carried field at load, so a typo is loud not a runaway.
+    if desc.while_:
+        heads = {m.split(".", 1)[0].strip() for m in re.findall(r"\$\{([^}]+)\}", desc.while_)}
+        unknown = sorted(heads - carried)
+        if unknown:
+            errors.append(
+                f"loop node {desc.id!r}: `while:` references unknown name(s) {unknown} — "
+                f"the predicate reads the carried record {sorted(carried)}"
+            )
     if errors:
         raise LoadError("\n  ".join(errors))
     return node, wiring

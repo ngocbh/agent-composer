@@ -162,6 +162,19 @@ def test_body_output_types_must_equal_carried():
 BAD_MAX = GOOD.replace("    max: 5\n", "    max: 0\n")
 
 
+# A `while:` predicate that references a name NOT in the carried record ({n, exited}) — here a
+# typo `exted` for `exited`. Record-scoped eval would resolve it falsy and spin to `max`, so it
+# must be rejected loudly at build.
+BAD_PREDICATE_NAME = GOOD.replace("    while: not ${exited}\n", "    while: not ${exted}\n")
+
+# `max:` must be a plain integer. The descriptor is a bare dataclass (its `Optional[int]`
+# annotation isn't enforced), so these non-int YAML types pass through to build_loop_node:
+# a quoted string, a float, and a bool (an int subclass that would silently read as 0/1).
+BAD_MAX_STR = GOOD.replace("    max: 5\n", '    max: "5"\n')
+BAD_MAX_FLOAT = GOOD.replace("    max: 5\n", "    max: 2.5\n")
+BAD_MAX_BOOL = GOOD.replace("    max: 5\n", "    max: true\n")
+
+
 def test_unsupported_predicate_is_rejected():
     with pytest.raises(LoadError) as e:
         load_flow(BAD_UNSUPPORTED)
@@ -174,3 +187,19 @@ def test_max_below_one_is_rejected():
         load_flow(BAD_MAX)
     assert "max" in str(e.value).lower()
     assert ">= 1" in str(e.value)
+
+
+def test_while_predicate_unknown_name_is_rejected():
+    with pytest.raises(LoadError) as e:
+        load_flow(BAD_PREDICATE_NAME)
+    assert "while" in str(e.value).lower()
+    assert "exted" in str(e.value)
+    assert e.value.line is not None
+
+
+@pytest.mark.parametrize("bad", [BAD_MAX_STR, BAD_MAX_FLOAT, BAD_MAX_BOOL])
+def test_non_int_max_is_rejected(bad):
+    with pytest.raises(LoadError) as e:
+        load_flow(bad)
+    assert "max" in str(e.value).lower()
+    assert "integer" in str(e.value)
