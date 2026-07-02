@@ -196,6 +196,15 @@ class FlowEngine:
             # `self.expansions` ever happens. For multi-pause AGENTs, every
             # cloned resume_id AND the original spawner_id are stamped to point at the
             # SAME AgentExpansion.
+        # Loop-back bookkeeping (distinct from `alias`, which commits-and-advances for
+        # CALL/MAP): a loop-body END filler routes to `_loop_step` (predicate -> re-clone the
+        # next iteration OR commit the final carried record + advance out-edges), never the
+        # generic alias-commit. `loop_iter` tracks the live iteration index per loop; `loop_desc`
+        # holds each loop's LoopExpansion so `_loop_step`'s continue-branch grows the same ledger
+        # entry.
+        self.loop_alias: dict[str, str] = {}   # loop-body END filler id -> loop spawner id
+        self.loop_iter: dict[str, int] = {}    # loop spawner id -> current iteration index
+        self.loop_desc: dict[str, Any] = {}    # loop spawner id -> its LoopExpansion
         self._cancel = False
 
     def request_abort(self) -> None:
@@ -764,6 +773,69 @@ class FlowEngine:
                 self._schedule(root)
         return cloned
 
+    def _grow_loop(self, spawner_id: str, child, record: dict, iteration: int, desc):
+        """Clone+register ONE loop iteration at callsite `f"{spawner_id}#{iteration}"` (the
+        per-iteration namespace, mirroring MAP's `#i`) and schedule its roots. Unlike
+        `_grow_call`/`_grow_map`, the body END filler is registered in `self.loop_alias`
+        (routes to `_loop_step` — predicate re-clone/commit) rather than `self.alias`
+        (commit-and-advance). Records the iteration's seed on the LoopExpansion so a future
+        durable replay can re-grow `#0..#i` (replay itself is deferred).
+
+        NOTE (slice-1 limitation): does NOT stamp `_spawner_expansion`/`depth` on cloned
+        spawner-eligible subnodes — slice-1 bodies are leaf-only (a `human_input` pause is a
+        leaf, not a spawner). An AGENT-in-loop body (the `ac chat` case) will need that
+        stamping to route its pause segments; tracked in DEFER."""
+        callsite = map_callsite(spawner_id, iteration)   # f"{spawner_id}#{iteration}"
+        cloned = clone_child(child, callsite=callsite, record=record)
+        with self.sm.lock:                               # append + register atomically
+            self.flow.add_subgraph(cloned.nodes, cloned.edges, cloned.wiring)
+            self.sm.register(list(cloned.nodes), cloned.edges)
+            if len(self.flow.nodes) > MAX_TOTAL_NODES:
+                raise RuntimeError(
+                    f"loop expansion exceeded node budget ({MAX_TOTAL_NODES}) at {spawner_id!r}"
+                )
+        self.loop_alias[cloned.out_node_id] = spawner_id
+        self.loop_iter[spawner_id] = iteration
+        # Record this iteration's seed on the ledger entry (one slot per iteration grown).
+        while len(desc.records) <= iteration:
+            desc.records.append(dict(record))
+            desc.children_per_iter.append([])
+        for root in cloned.roots:
+            self._schedule(root)                         # respects suspend (deferred)
+        return cloned
+
+    def _loop_step(self, filler_id: str, next_record: dict) -> None:
+        """A loop body END (`filler_id`) fired with `next_record` (the body's output = the next
+        carried record). Evaluate the loop's `while:` predicate on it and either CONTINUE (clone
+        the next iteration) or STOP (commit the final carried record under the loop spawner and
+        advance its out-edges). Hitting `max_iters` is a located run failure."""
+        spawner_id = self.loop_alias.pop(filler_id)
+        loop = self.flow.nodes[spawner_id]
+        self.sm.finish_executing(filler_id)
+        from agent_composer.expr.expressions import evaluate_when_record
+        if evaluate_when_record(loop.predicate, next_record):
+            nxt = self.loop_iter[spawner_id] + 1
+            if nxt >= loop.max_iters:
+                raise NodeExecutionError(
+                    spawner_id, f"loop {spawner_id!r} exceeded max ({loop.max_iters})",
+                    "LoopMaxExceeded",
+                    locator=SourceSpan(node=spawner_id, kind="field", key="max"),
+                )
+            self._grow_loop(spawner_id, loop.child, next_record, nxt, self.loop_desc[spawner_id])
+            return
+        # Predicate false: terminate. Commit the final carried record under the spawner id
+        # (same SegmentError -> NodeExecutionError guard the alias-commit tail uses) and fire
+        # the spawner's out-edges.
+        try:
+            self.pool.set(spawner_id, next_record, declared=loop.output_shape)
+        except SegmentError as exc:
+            raise NodeExecutionError(
+                spawner_id, str(exc), type(exc).__name__,
+                locator=SourceSpan(node=spawner_id, kind="field", key="output"),
+            )
+        for nid in self._advance(spawner_id):
+            self._schedule(nid)
+
     def _replay_expansions(self, expansions: list, *, parent_depth: int = 0,
                            is_top_level: bool = True) -> None:
         """Deterministic fold over a persisted descriptor tree: re-grow the live
@@ -876,6 +948,34 @@ class FlowEngine:
             self._grow_agent_segment(spawner_id, hi_desc, resume_desc, desc, schedule=True)
             return
 
+        if spawner.kind == NodeKind.LOOP:
+            # Turn-0 pre-check: the carried record is defined at the seed (`inputs:`), so the
+            # `while:` predicate has something to read before any body run. LOOP is NOT REF
+            # recursion — it SKIPS the MAX_REF_DEPTH block below (bounded by `max_iters` +
+            # MAX_TOTAL_NODES instead), so this arm returns before it, like the AGENT arm.
+            from agent_composer.expr.expressions import evaluate_when_record
+            from agent_composer.suspension.expansions import LoopExpansion
+            seed = dict(enqueues[0].inputs)
+            desc = LoopExpansion(spawner_id=spawner_id, records=[], children_per_iter=[])
+            self.loop_desc[spawner_id] = desc
+            self.expansions.append(desc)          # a closed-union ledger member
+            self.sm.finish_executing(spawner_id)
+            self.sm.mark_node(spawner_id, NodeState.EXPANDED)
+            if evaluate_when_record(spawner.predicate, seed):
+                self._grow_loop(spawner_id, enqueues[0].target, seed, 0, desc)
+            else:
+                # 0 body runs: commit the seed as the final carried record, advance out-edges.
+                try:
+                    self.pool.set(spawner_id, seed, declared=spawner.output_shape)
+                except SegmentError as exc:
+                    raise NodeExecutionError(
+                        spawner_id, str(exc), type(exc).__name__,
+                        locator=SourceSpan(node=spawner_id, kind="field", key="output"),
+                    )
+                for nid in self._advance(spawner_id):
+                    self._schedule(nid)
+            return
+
         # Depth bound (REF/MAP only): this expansion is at depth d (parent depth +
         # 1). A genuinely deep REF/MAP chain trips MAX_REF_DEPTH before MAX_TOTAL_NODES; raises ->
         # RunFailed. (The agent arm above returns before this — its pauses are NOT recursion.)
@@ -951,6 +1051,12 @@ class FlowEngine:
             raise RuntimeError(f"unhandled spawner kind {spawner.kind}")
 
     def _on_success(self, node_id: str, event: NodeSucceeded) -> None:
+        # A loop-body END filler routes to `_loop_step` (predicate -> re-clone the next
+        # iteration OR commit the final carried record + advance) — NOT the generic
+        # alias-commit below. Checked first because a loop filler is never in `self.alias`.
+        if node_id in self.loop_alias:
+            self._loop_step(node_id, event.output)
+            return
         # An alias filler (cloned child END_ID / MAP END_ID-list / resume continuation) is a pure sink with no
         # out-edge of its own: substitute the spawner — write the filler's value under
         # the SPAWNER id (same SegmentError -> NodeExecutionError guard the ordinary tail uses)
