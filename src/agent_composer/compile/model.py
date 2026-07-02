@@ -169,3 +169,24 @@ class CompiledFlow:
         for edge in edges:
             self._outgoing.setdefault(edge.from_, []).append(edge)
             self._incoming.setdefault(edge.to, []).append(edge)
+
+    def remove_subgraph(self, node_ids: set[str]) -> None:
+        """Drop a finished (deep-namespaced) sub-namespace from the live topology — the inverse
+        of add_subgraph, used ONLY to prune a fully-committed loop iteration whose ids are never
+        referenced again. Removes the nodes, their incident edges, wiring, and adjacency.
+
+        Leaves the CompiledFlow internally consistent: no surviving edge or adjacency entry keys
+        on or points at a removed id, matching what the graph would be had those nodes never been
+        added."""
+        for nid in node_ids:
+            self.nodes.pop(nid, None)
+            self.wiring.pop(nid, None)
+        # Drop every edge incident to a removed node (as producer or consumer).
+        self.edges = [e for e in self.edges
+                      if e.from_ not in node_ids and e.to not in node_ids]
+        # Rebuild adjacency: drop keys for removed ids, and prune surviving lists of any edge
+        # that touches a removed id.
+        self._outgoing = {k: [e for e in v if e.to not in node_ids]
+                          for k, v in self._outgoing.items() if k not in node_ids}
+        self._incoming = {k: [e for e in v if e.from_ not in node_ids]
+                          for k, v in self._incoming.items() if k not in node_ids}
