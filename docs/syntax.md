@@ -368,6 +368,48 @@ each:
     ticker: ${item}
 ```
 
+### `loop` — iterate a body until a predicate goes false
+
+`loop` runs a child flow (the **body**) over and over, threading one **carried
+record** from each iteration into the next. It is the engine's `while`: the body
+maps the carried record to the *next* carried record (`'a -> 'a`), and the loop
+re-runs it while a predicate holds.
+
+```yaml
+turn:
+  kind: loop
+  call: chat_turn              # the body flow (a def or a file)
+  input:                       # the SEED carried record
+    messages: []
+    exited: false
+  while: not ${exited}         # pre-check predicate, over the carried record
+  max: 100                     # required runaway guard
+```
+
+- **`input:`** is the seed carried record — its field names and types define `'a`.
+- **`call:`** names the body. The body's `output:` must be the **same shape** as
+  the carried record (`'a -> 'a`), and the fields the body reads (`${input.X}`)
+  must be a subset of the carried names. This contract is checked twice: field
+  **names** at build, field **types** at load.
+- **`while:`** is a **pre-check** predicate evaluated on the carried record before
+  each iteration (0 iterations run if the seed already fails it). It is a
+  record-scoped boolean over bare `${name}` refs — and, like every condition,
+  **`not` sits OUTSIDE the `${...}` span**: write `while: not ${exited}`, never
+  `while: ${not exited}`.
+- **`max:`** is a **required** runaway guard: if the loop would run more than
+  `max` iterations the run fails loudly (`LoopMaxExceeded`).
+
+The node's value is the final carried record (committed under the loop node's id
+once the predicate goes false).
+
+A body may itself pause (e.g. a `human_input` leaf): the run suspends mid-loop and
+resumes into the next iteration — this is the shape a chat REPL takes.
+
+> **Slice 1 is `while:`-only and in-process.** `until:`/`times:` are parsed but
+> not yet built (they raise a clear "not supported" at load), and durable
+> cross-process resume of a live loop is deferred — a paused loop resumes within
+> the same process.
+
 ## Effects from inside an agent — the `ask_user` control
 
 A `tool_calling` agent can be granted the `ask_user` **control**. Unlike

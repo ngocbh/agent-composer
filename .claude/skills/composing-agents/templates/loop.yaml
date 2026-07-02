@@ -1,0 +1,53 @@
+# Loop — iterate a body until a predicate goes false (the engine's `while`).
+# The loop threads ONE carried record from each turn into the next: the body maps
+# the carried record to the NEXT carried record ('a -> 'a), and the loop re-runs it
+# while `while:` holds. Here the body PAUSES each turn on a human_input leaf, so
+# this is the shape a chat REPL takes: run -> pause -> resume -> pause -> ... -> done.
+#
+# The contract ('a -> 'a): the body's `output:` shape must EQUAL the carried record
+# (the loop `input:`), and the names the body reads must be a SUBSET of the carried
+# names. Field NAMES are checked at build, field TYPES at load.
+#
+# Customize: point `code:` at an importable `module:function` on your PYTHONPATH.
+#   def fold_turn(inputs: dict) -> dict:      # receives its bound input record
+#       messages = inputs["messages"] + [inputs["msg"]]
+#       return {"messages": messages, "exited": inputs["msg"] == "bye"}
+#
+# Slice 1 is `while:`-only and in-process: `until:`/`times:` parse but aren't built
+# yet, and durable cross-process resume of a live loop is deferred.
+
+id: loop
+name: loop
+description: Chat-shaped loop — pause per turn, fold the message, stop on "bye".
+
+defs:
+  chat_turn:                       # the body flow ('a -> 'a over {messages, exited})
+    input:
+      messages: list[str]          # a subset of the carried names is fine
+    nodes:
+      ask:
+        kind: human_input
+        prompt: "your message (type 'bye' to end)"
+        output: str                # the typed answer
+      fold:
+        kind: code
+        input:
+          messages: ${input.messages}
+          msg: ${ask.output}       # this turn's human message
+        output:                    # MUST equal the carried record shape
+          messages: list[str]
+          exited: bool
+        code: your_package.chat:fold_turn
+    output: ${fold.output}
+
+nodes:
+  loop:
+    kind: loop
+    call: chat_turn                # the body (a def here; may also be a `uses:` file)
+    input:                         # the SEED carried record — defines 'a
+      messages: []
+      exited: false
+    while: not ${exited}           # pre-check; `not` sits OUTSIDE the ${...} span
+    max: 100                       # required runaway guard (LoopMaxExceeded)
+
+output: ${loop.output}

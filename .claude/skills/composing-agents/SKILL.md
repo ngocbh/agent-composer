@@ -27,8 +27,9 @@ branch+join, tool use, human gate, `call`/`map` composition); copy one and edit.
 2. **Name reusable types** in `typedefs:` (enums, records, aliases).
 3. **Decompose into leaf nodes.** Each node is one step: an LLM call (`agent`),
    deterministic code (`code`), a registered tool (`tool`), a branch (`case`), a
-   human gate (`human_input`), a timed pause (`wait`), or a child-flow call
-   (`call`/`map`). Prefer many small typed nodes over one mega-prompt.
+   human gate (`human_input`), a timed pause (`wait`), a child-flow call
+   (`call`/`map`), or an iterated body (`loop`). Prefer many small typed nodes over
+   one mega-prompt.
 4. **Wire by reference, not by edges.** A node consumes another by putting
    `${producer.output}` in its `input:` block. That reference *is* the edge.
 5. **Bind the flow `output:`** to the terminal node(s).
@@ -84,7 +85,7 @@ prompt: "Write a warm one-sentence greeting to ${name}."
 ```
 
 Allowed only for the **leaf kinds** (`agent`, `code`, `model`, `tool`,
-`human_input`) — `case`/`call`/`map` need the full `nodes:` form. See
+`human_input`) — `case`/`call`/`map`/`loop` need the full `nodes:` form. See
 [`templates/compact.yaml`](templates/compact.yaml).
 
 ## References — how you wire values
@@ -262,6 +263,26 @@ nodes:
 `call:` resolves **defs-first, else a `uses:` alias** (an external flow on the
 search path, by filename; `alias@v1` adds a version guard). Reference the callee's
 object fields downstream as `${each.output.field}`.
+
+### `loop` — iterate a body until a predicate goes false (the engine's `while`)
+Threads ONE carried record from each turn into the next: the body maps the carried
+record to the NEXT one (`'a -> 'a`), and the loop re-runs while `while:` holds.
+```yaml
+turn:
+  kind: loop
+  call: chat_turn              # the body (a def or a `uses:` file)
+  input:                       # the SEED carried record — defines 'a
+    messages: []
+    exited: false
+  while: not ${exited}         # pre-check over the carried record; `not` OUTSIDE ${...}
+  max: 100                     # REQUIRED runaway guard (LoopMaxExceeded)
+```
+The body's `output:` shape must **equal** the carried record and read only a
+**subset** of its names (`'a -> 'a`) — names checked at build, types at load. The
+node's value is the final carried record. A body that pauses (a `human_input` leaf)
+makes the loop a chat REPL: run/resume threads each turn. **Slice 1 is `while:`-only
+and in-process** — `until:`/`times:` parse but raise "not supported"; durable
+cross-process resume of a live loop is deferred.
 
 ## Run-ordering without data (`depends_on` / `runs_after`)
 Both gate a node on another **settling** even when no value flows. `depends_on:

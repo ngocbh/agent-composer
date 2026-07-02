@@ -15,7 +15,10 @@ This directory (`docs/backlog/`) is tracked in git and published in the doc site
   repeat-until-N / `while:` predicate with carried state (e.g. a self-critique refine loop).
   Child-engine drivers reusing the `MAP` `over`/`${item}` machinery + a carried-state accumulator.
   The until-condition `LOOP` also needs the in-iteration suspension story (host resume seam + parallel
-  resume).
+  resume). **The `while:` LOOP slice SHIPPED** (2026-07-02) — the in-iteration-suspension prerequisite
+  for the agentic `ac chat` REPL below is now met **in-process** (a `human_input` body pauses per turn
+  and resumes into the next iteration). Still pending: `until:`/`times:` slices, DURABLE cross-process
+  resume of a live loop (`_replay_expansions` raises for `LoopExpansion` today), and `FOLD`/`REDUCE`.
 - **`WATCH` predefined composite** — TOOL + CASE + WAIT + loop, run via `call`, shown as one
   collapsed node. Needs cyclic-graph validation + engine-level re-enqueue (the watch-loop) and an
   unauthorable `EventAwaited` pause reason.
@@ -50,3 +53,13 @@ This directory (`docs/backlog/`) is tracked in git and published in the doc site
   ollama `confirm_ollama_endpoint` path) so vLLM shows in the picker.
 - **Run-history UI** — a `/runs` browser over written run transcripts; durable-run surfacing — pairs
   with the server. \ngoc{what is this?}
+- **Agentic `ac chat` REPL** (decided 2026-07-01) — a Claude-Code-style interactive chatbox where a
+  top-level **composer agent** can discover, run, validate, and *author* flows on the user's behalf.
+  Dogfooded as a real Agent Composer flow: a `tool_calling` AGENT inside a `LOOP` that suspends each
+  turn for the human's next message. Dependency chain: (1) the `LOOP` construct above (in-iteration-
+  suspension `while:` variant) — **DONE in-process** (2026-07-02); an AGENT-in-loop body still needs
+  `_grow_loop` spawner-subnode stamping (see DEFER) to route its pause segments; (2) flow-op tools
+  (`list_flows`, `read_flow`, `run_flow`, `validate_flow`, `write_flow`) registered into
+  `TOOL_REGISTRY`; (3) the chat flow `.yaml`; (4) the `ac chat` CLI surface (scaffold exists at
+  `cli/chat/`). `write_flow` writes YAML to disk — needs a confirm/guard. Scoped chat model + tool set
+  chosen with the user; sequencing = LOOP (done), then plan tools + chat.

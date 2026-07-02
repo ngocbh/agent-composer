@@ -24,6 +24,7 @@ Copy, rename, and edit.
 | [`child-summarize.yaml`](templates/child-summarize.yaml) | a reusable CHILD flow |
 | [`call-child.yaml`](templates/call-child.yaml) | `call` a sibling flow once (via `uses:`) |
 | [`map-fanout.yaml`](templates/map-fanout.yaml) | `map` a child over a list, in parallel |
+| [`loop.yaml`](templates/loop.yaml) | `loop` a body until a predicate goes false — chat-shaped pause-per-turn |
 | [`llm-config-cascade.yaml`](templates/llm-config-cascade.yaml) | flow-level `llm_config:`, per-node override, `inherit: false` |
 
 `call-child.yaml` and `map-fanout.yaml` depend on `child-summarize.yaml` being on
@@ -107,6 +108,14 @@ keyed by each question's `header`.
 `uses: <alias>: <filename>`, and `call:` it (once) or `map:` it (per list element).
 Reference its object fields downstream as `${node.output.field}`.
 
+**Loop until done.** Use a `loop` node to re-run a body while a predicate holds (the
+engine's `while`). The `input:` is the SEED carried record; the body maps it to the
+NEXT carried record (`'a -> 'a` — same `output:` shape as `input:`), and `while: not
+${done}` is a pre-check over the carried record (`not` OUTSIDE the `${...}` span).
+`max:` is a required runaway guard. A body that pauses (a `human_input` leaf) makes
+the loop a chat REPL — run/resume threads each turn. See `loop.yaml`. Slice 1 is
+`while:`-only and in-process.
+
 ## Gotchas
 
 - **Inline `{ ... }` maps + `${...}` need quotes.** In an inline flow mapping the
@@ -128,6 +137,10 @@ Reference its object fields downstream as `${node.output.field}`.
   the search path). `alias@v1` adds a version guard.
 - **MODEL nodes aren't wired** — `kind: model` parses but running one raises. Use
   `code` for deterministic compute.
+- **`loop` bodies must be `'a -> 'a`.** The body's `output:` shape must EQUAL the
+  loop's `input:` (carried record) and read only a subset of its names — checked at
+  build (names) and load (types). `while:`/`max:` are required in this slice;
+  `until:`/`times:` parse but raise "not supported" at load.
 - **Node-local `asserts:` reading `${output}` are POST checks** — they fire once the
   node's value is committed, and fail the run loudly on a false/raising expr. This
   includes a `call` node: its POST asserts may read `${output}` **and** the call's
