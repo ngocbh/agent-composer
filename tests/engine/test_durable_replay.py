@@ -614,6 +614,53 @@ def test_grow_loop_schedule_false_registers_without_scheduling():
     assert list(engine.ready) == []
 
 
+def test_replay_reproduces_live_loop_overlay():
+    """Replaying a paused-loop `ckpt.expansions` onto a FRESH recompiled flow rebuilds the SAME
+    live iteration overlay the live engine grew: flow.nodes / loop_alias / sm.node_state
+    (set-equality), the spawner staying EXPANDED, and the ledger re-attached to `loop_desc`.
+
+    Pruning drops committed iterations before any pause, so exactly ONE iteration (the LIVE one)
+    is resident — the replay re-grows that single last-recorded seed at its recorded index."""
+    from agent_composer.compose.loader import load_flow
+    from agent_composer.compose.run import run_flow
+    from agent_composer.suspension.expansions import LoopExpansion
+    from tests.engine.test_loop_run import LOOP_CHAT
+
+    # Drive LOOP_CHAT to its FIRST pause on a live engine: iteration #0 is grown (NOT yet pruned
+    # — pruning happens in _loop_step AFTER the body END fires, but the body parks BEFORE its END).
+    loaded = load_flow(LOOP_CHAT)
+    live = run_flow(loaded, {})
+    assert live.status == "paused"
+    live_engine = live.engine
+
+    # Precondition: the live overlay has the `loop#0/` namespace present (un-pruned live iter).
+    assert any(n.startswith("loop#0/") for n in live_engine.flow.nodes)
+
+    # Capture the loop-relevant overlay a replay must reproduce (loop_alias, not alias, holds the
+    # body-END filler; also capture sm.node_state and the spawner's own EXPANDED state).
+    live_nodes = set(live_engine.flow.nodes)
+    live_loop_alias = dict(live_engine.loop_alias)
+    live_node_state = set(live_engine.sm.node_state)
+    assert live_engine.sm.node_state["loop"] == NodeState.EXPANDED
+
+    # Snapshot + round-trip: exactly ONE LoopExpansion with a non-empty records list (live seed).
+    ckpt = RunCheckpoint.loads(live_engine.snapshot().dumps())
+    loop_descs = [e for e in ckpt.expansions if isinstance(e, LoopExpansion)]
+    assert len(loop_descs) == 1
+    assert loop_descs[0].records                       # the live iteration seed is recorded
+
+    # Replay in isolation onto a FRESH recompiled flow (before restore() wires it in).
+    fresh = FlowEngine(load_flow(LOOP_CHAT).compiled)
+    fresh._replay_expansions(ckpt.expansions)
+
+    # Set-for-set overlay equality against the live engine.
+    assert set(fresh.flow.nodes) == live_nodes
+    assert dict(fresh.loop_alias) == live_loop_alias
+    assert set(fresh.sm.node_state) == live_node_state
+    assert fresh.sm.node_state["loop"] == NodeState.EXPANDED
+    assert fresh.loop_desc["loop"] is loop_descs[0]    # the ledger was re-attached
+
+
 def test_snapshot_captures_num_workers():
     from agent_composer.runtime.engine import FlowEngine
     from tests.engine.test_engine_expansions_ledger import call_with_inner_pause

@@ -15,8 +15,9 @@ Closed sum (one variant per spawner kind, mirroring `_apply_enqueue`'s arms):
 - `MapExpansion(spawner_id, records, children_per_element)` — MAP spawned N children.
 - `AgentExpansion(spawner_id, segments)` — AGENT paused K times; one segment per pause.
 - `LoopExpansion(spawner_id, records, children_per_iter)` — LOOP grew one body clone per
-  iteration; `records[i]` is iteration `i`'s seed carried record. In-memory only for now —
-  durable replay of a live loop is deferred (`_replay_expansions` raises for it).
+  iteration; `records[i]` is iteration `i`'s seed carried record. Pruning drops committed
+  iterations before any pause, so durable replay re-grows only the LIVE iteration (the last
+  recorded seed) on restore.
 
 Nested expansions (a REF inside a cloned child, an inner MAP, etc.) appear as
 children of their enclosing descriptor — uniform recursion at any depth.
@@ -72,10 +73,10 @@ class AgentExpansion(BaseModel):
 
 class LoopExpansion(BaseModel):
     """Ledger entry for a `loop` spawner: one `records[i]` per iteration seed grown so far,
-    with a per-iteration nested-expansion slot (`children_per_iter[i]`). Slice 1 uses it
-    in-memory only; durable replay (re-grow `#0..#i` from the recorded seeds) is deferred —
-    `_replay_expansions` raises `NotImplementedError` for this variant rather than
-    reconstructing iterations."""
+    with a per-iteration nested-expansion slot (`children_per_iter[i]`). Durable replay is
+    supported: pruning drops committed iterations from the live overlay before any pause, so
+    only ONE iteration (the LIVE one) is resident — `_replay_expansions` re-grows exactly that
+    last recorded seed at its recorded index on restore."""
 
     type: Literal["loop_expansion"] = "loop_expansion"
     spawner_id: str

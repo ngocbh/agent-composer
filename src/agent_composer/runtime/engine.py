@@ -779,9 +779,9 @@ class FlowEngine:
         per-iteration namespace, mirroring MAP's `#i`) and schedule its roots. Unlike
         `_grow_call`/`_grow_map`, the body END filler is registered in `self.loop_alias`
         (routes to `_loop_step` — predicate re-clone/commit) rather than `self.alias`
-        (commit-and-advance). Records the iteration's seed on the LoopExpansion so a future
-        durable replay can re-grow `#0..#i` (replay itself is deferred). `schedule=False`
-        suppresses the budget guard + root scheduling (the deferred replay path), mirroring
+        (commit-and-advance). Records the iteration's seed on the LoopExpansion so durable
+        replay can re-grow the live iteration from the recorded seed. `schedule=False`
+        suppresses the budget guard + root scheduling (the replay path), mirroring
         `_grow_call`/`_grow_map`.
 
         NOTE (slice-1 limitation): does NOT stamp `_spawner_expansion`/`depth` on cloned
@@ -987,11 +987,20 @@ class FlowEngine:
                                             is_top_level=False)
                     current = cloned.out_node_id
             elif isinstance(desc, LoopExpansion):
-                # Durable replay of a live loop (re-grow #0..#i from the recorded seeds) is
-                # deferred (slice 1 is in-process only). Kept as a closed-sum member so this
-                # match stays exhaustive; a snapshot/restore of a paused loop fails loudly
-                # here rather than silently hitting the generic `else`.
-                raise NotImplementedError("durable loop replay deferred")
+                child = self.flow.nodes[spawner_id].child          # baked at load
+                self.loop_desc[spawner_id] = desc                  # re-attach ledger for _loop_step
+                # The live LOOP arm finishes+marks the spawner once; replay must reproduce that (the
+                # spawner stays EXPANDED while the live iteration runs). _grow_loop does NOT mark it.
+                self.sm.finish_executing(spawner_id)
+                self.sm.mark_node(spawner_id, NodeState.EXPANDED)
+                # Pruning leaves only the LIVE iteration resident at any pause, so re-grow exactly
+                # ONE iteration — the last recorded seed — at its recorded index.
+                i = len(desc.records) - 1                           # pruning => only the LIVE iteration
+                if i >= 0:
+                    self._grow_loop(spawner_id, child, dict(desc.records[i]), i, desc, schedule=False)
+                    for kids in desc.children_per_iter[i:i + 1]:
+                        self._replay_expansions(kids, parent_depth=self.depth.get(spawner_id, 0) + 1,
+                                                is_top_level=False)
             else:
                 raise ValueError(f"unknown Expansion descriptor {type(desc).__name__!r}")
 
