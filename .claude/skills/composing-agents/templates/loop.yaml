@@ -48,6 +48,6 @@ nodes:
       messages: []
       exited: false
     while: not ${exited}           # pre-check; `not` sits OUTSIDE the ${...} span
-    max: 100                       # required runaway guard (LoopMaxExceeded)
+    max: 100                       # required runaway guard, >= 1 (LoopMaxExceeded)
 
 output: ${loop.output}

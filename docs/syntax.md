@@ -396,8 +396,8 @@ turn:
   record-scoped boolean over bare `${name}` refs — and, like every condition,
   **`not` sits OUTSIDE the `${...}` span**: write `while: not ${exited}`, never
   `while: ${not exited}`.
-- **`max:`** is a **required** runaway guard: if the loop would run more than
-  `max` iterations the run fails loudly (`LoopMaxExceeded`).
+- **`max:`** is a **required** runaway guard (must be `>= 1`): if the loop would run
+  more than `max` iterations the run fails loudly (`LoopMaxExceeded`).
 
 The node's value is the final carried record (committed under the loop node's id
 once the predicate goes false).
