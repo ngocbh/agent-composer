@@ -64,14 +64,6 @@ landed at 9867b04):
 
 ## CLI
 
-- [ ] **Describe inputs when prompting** — the flow `input:` section is `name: TYPE` (or
-  `TYPE = default`) with no place for a human description (`InputDecl` in `compose/shapes.py:55` has
-  `name`/`type`/`default`/`required`/`shape`, **no `description`**). Two parts: (a) let an author
-  attach a per-input description in the YAML and thread it onto `InputDecl`; (b) when the CLI prompts
-  for a missing input (`_prompt_missing`, `cli/run.py`), show that description. Required/optional is
-  already surfaced (required inputs are starred). **Scope: flow-level inputs only** — node `inputs:` are
-  wired from refs, never prompted from a human, so they get no description slot.
-
 - [ ] **`cli/utils.py` helpers** referenced by `llm_clients` comments but not built: `ensure_api_key`
   (interactive key prompt) + `confirm_ollama_endpoint`.
 
