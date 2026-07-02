@@ -95,7 +95,25 @@ aren't sure after the answer, **ask again** — don't fill gaps from inference.
   Mark them `in_progress` when you start, `completed` only when the test passes.
 - **Commit at green.** Each "code + test + green" cycle gets its own commit.
 
-### Keep docs and skills current as the engine changes
+### Work on a feature branch — a task is done only when merged to main
+
+Never implement a feature directly on `main`. When you start a feature (or any
+non-trivial change), **cut a branch first** and work from there:
+
+- **Branch off** `main` for independent work, or off another `dev/...` branch when
+  the work builds on an unmerged feature.
+- **Name it** `dev/<domain>/<feature>` — `<domain>` is the area it touches (`engine`,
+  `cli`, `compose`, `docs`, ...); `<feature>` is a short kebab-case slug. Example:
+  `dev/engine/loop-until-times`, `dev/cli/chat-repl`.
+- **Track it** in [`docs/backlog/BRANCHES.md`](docs/backlog/BRANCHES.md): add a row
+  (branch, base, purpose, date) the moment you cut the branch, and **remove the row
+  when it merges to `main`**. Never let an open branch live only in your head.
+- **A feature is finished only after it is merged to `main`** — not when the code is
+  written, not when tests pass on the branch. Until the merge lands, the work is
+  in-flight and stays listed in `BRANCHES.md`. Record the landing hash in
+  [`docs/backlog/DONE.md`](docs/backlog/DONE.md) per the Zeroth rule.
+
+
 
 The docs and the Claude skills **are part of the engine's contract** — a stale doc
 is a bug, not a chore. When a change touches a surface someone reads, update its

@@ -14,6 +14,27 @@ pip install -e ".[all,dev]"
 The `all` extra pulls in every provider client (Anthropic / OpenAI / Google /
 Ollama); `dev` adds the test and build tooling.
 
+## Branching workflow
+
+Never commit a feature straight to `main`. Cut a branch first and work from there:
+
+- **Branch off** `main` for independent work, or off another `dev/...` branch when the
+  work builds on an unmerged feature.
+- **Name it** `dev/<domain>/<feature>` — `<domain>` is the area it touches (`engine`,
+  `cli`, `compose`, `docs`, ...) and `<feature>` is a short kebab-case slug, e.g.
+  `dev/engine/loop-until-times` or `dev/cli/chat-repl`.
+- **Track it** in [`docs/backlog/BRANCHES.md`](docs/backlog/BRANCHES.md): add a row when
+  you open the branch, and remove it when it merges.
+- **A feature is finished only once it is merged to `main`** — not when the code is
+  written or tests pass on the branch. Record the landing commit in
+  [`docs/backlog/DONE.md`](docs/backlog/DONE.md).
+
+```bash
+git switch -c dev/engine/loop-until-times   # cut the branch off main
+# ... implement, test, commit ...
+# open a PR; a feature is done only after it merges to main
+```
+
 ## Running tests
 
 ```bash
