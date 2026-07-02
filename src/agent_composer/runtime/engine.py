@@ -986,10 +986,17 @@ class FlowEngine:
             return
 
         if spawner.kind == NodeKind.LOOP:
-            # Turn-0 pre-check: the carried record is defined at the seed (`inputs:`), so the
-            # `while:` predicate has something to read before any body run. LOOP is NOT REF
-            # recursion — it SKIPS the MAX_REF_DEPTH block below (bounded by `max_iters` +
-            # MAX_TOTAL_NODES instead), so this arm returns before it, like the AGENT arm.
+            # Turn-0 pre-check. LOOP is NOT REF recursion — it SKIPS the MAX_REF_DEPTH block
+            # below (bounded by `max_iters` + MAX_TOTAL_NODES instead), so this arm returns
+            # before it, like the AGENT arm. The LoopExpansion descriptor + finish_executing +
+            # mark-EXPANDED bookkeeping is identical for all three kinds; ONLY the turn-0
+            # grow-vs-commit decision differs:
+            #   while  — grow #0 (run the body) IFF the predicate holds on the seed; else
+            #            commit the seed unchanged (0 body runs). The carried record is defined
+            #            at the seed (`inputs:`), so the predicate has something to read.
+            #   until  — DO-WHILE: always grow #0 (1+ runs); the predicate is a POST-check
+            #            (`_loop_step`, A5), never consulted here.
+            #   times  — always grow #0 (a `times >= 1` count is guaranteed at build).
             from agent_composer.expr.expressions import evaluate_when_record
             from agent_composer.suspension.expansions import LoopExpansion
             seed = dict(enqueues[0].inputs)
@@ -998,7 +1005,12 @@ class FlowEngine:
             self.expansions.append(desc)          # a closed-union ledger member
             self.sm.finish_executing(spawner_id)
             self.sm.mark_node(spawner_id, NodeState.EXPANDED)
-            if evaluate_when_record(spawner.predicate, seed):
+            # `until`/`times` grow #0 unconditionally (the same "grow #0" path `while`-true
+            # takes); only `while` consults the seed predicate to decide grow-vs-commit.
+            grow = spawner.predicate_kind != "while" or evaluate_when_record(
+                spawner.predicate, seed
+            )
+            if grow:
                 self._grow_loop(spawner_id, enqueues[0].target, seed, 0, desc)
             else:
                 # 0 body runs: commit the seed as the final carried record, advance out-edges.

@@ -189,6 +189,51 @@ def test_while_loop_predicate_runtime_error_fails_run():
     assert "division by zero" in (result.error or "")
 
 
+# `until:` is a DO-WHILE: the body must run AT LEAST once before the predicate is ever
+# consulted. Here the seed n=0 does NOT satisfy `until: ${n} > 0`, so a `while`-style turn-0
+# pre-check would run the body 0 times and commit the seed unchanged ({n: 0}). Correct
+# `until` grows #0 unconditionally: the body runs (n -> -1), then the post-check finds the
+# `until:` boolean false on {n:-1} and terminates at {n:-1}. The assertion `output != {n:0}`
+# isolates the A4 seed pre-check (body ran >= once, seed not committed as-is) and holds under
+# both the A4-alone regime (old `while`-style `_loop_step` also stops on `-1 > 0` = False ->
+# {n:-1}) and the A5 do-while regime ({n:-1}).
+UNTIL_SEED_TRUE = """
+id: ust
+name: ust
+defs:
+  countdown:
+    input:
+      n: int
+    nodes:
+      step:
+        kind: code
+        code: tests.engine._compose_codefns:loop_countdown
+        input:
+          n: ${input.n}
+        output:
+          n: int
+    output: ${step.output}
+nodes:
+  loop:
+    kind: loop
+    call: countdown
+    input:
+      n: 0
+    until: ${n} > 0
+    max: 5
+output: ${loop.output}
+"""
+
+
+def test_until_runs_body_at_least_once():
+    # A4 alone: turn-0 grows #0 unconditionally for `until:`. The seed n=0 does NOT satisfy
+    # `until: ${n} > 0`, so a `while`-style pre-check would commit {n:0} with 0 runs. Correct
+    # `until` runs the body -> {n:-1}. Asserting `output != {n:0}` proves the body ran and the
+    # seed was not committed unchanged; it holds in the A4-alone and A5 regimes alike.
+    result = run_flow(load_flow(UNTIL_SEED_TRUE), {})
+    assert result.output != {"n": 0}   # seed was not committed unchanged; body ran >= once
+
+
 def test_loop_budget_exceeded_in_step_fails_run(monkeypatch):
     # The node-budget guard inside `_grow_loop` raises a RuntimeError; when that grow is
     # driven from `_loop_step` (iteration >= 1) it must become a failed run, not an uncaught
