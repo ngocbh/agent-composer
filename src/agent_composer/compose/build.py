@@ -781,7 +781,16 @@ def build_loop_node(desc: LoopDescriptor, resolver: ChildResolver) -> tuple[Node
 
     errors: list[str] = []
     # Slice legality: `while:` selects the slice this build supports; `max:` is the
-    # required runaway guard for a while/until loop.
+    # required runaway guard for a while/until loop. `until:`/`times:` are parsed (the
+    # descriptor accepts them for the future slices) but not yet built — reject them
+    # explicitly so an author gets a clear "not supported" instead of a misleading
+    # "requires `while:`" (or a silently-ignored predicate).
+    unsupported = [k for k, v in (("until", desc.until_), ("times", desc.times)) if v is not None]
+    if unsupported:
+        errors.append(
+            f"loop node {desc.id!r}: {', '.join(repr(k) for k in unsupported)} not yet "
+            f"supported — only `while:` is built in this slice"
+        )
     if desc.while_ is None:
         errors.append(f"loop node {desc.id!r}: slice requires `while:`")
     if desc.max is None:

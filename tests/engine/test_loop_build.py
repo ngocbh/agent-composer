@@ -125,11 +125,21 @@ output: ${chat_loop.output}
 """
 
 
+# A `while:`-carrying loop that ALSO sets `until:` — a future-slice predicate the build
+# does not support yet. Must be rejected loudly, not silently ignored.
+BAD_UNSUPPORTED = GOOD.replace(
+    "    while: not ${exited}\n", "    while: not ${exited}\n    until: ${exited}\n"
+)
+
+
 def test_good_loop_bakes_loopnode():
     flow = load_flow(GOOD)
     node = flow.compiled.nodes["chat_loop"]
     assert node.kind == NodeKind.LOOP
     assert node.child is not None
+    # output_shape IS the carried record shape (the body codomain) — prove the contract
+    # baked, not just that a child was resolved.
+    assert set(node.output_shape.fields.keys()) == {"n", "exited"}
 
 
 def test_body_output_fieldset_must_equal_carried():
@@ -142,4 +152,13 @@ def test_body_output_fieldset_must_equal_carried():
 def test_body_output_types_must_equal_carried():
     with pytest.raises(LoadError) as e:
         load_flow(BAD_TYPES)
+    # pin the failure to the TYPE pass (check_loop_shape_contract), not any LoadError.
+    assert "carried field" in str(e.value)
     assert e.value.line is not None
+
+
+def test_unsupported_predicate_is_rejected():
+    with pytest.raises(LoadError) as e:
+        load_flow(BAD_UNSUPPORTED)
+    assert "until" in str(e.value)
+    assert "while" in str(e.value)

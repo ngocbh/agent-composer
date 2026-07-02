@@ -714,7 +714,8 @@ def _assemble(
     flow_input_shapes = {decl.name: decl.shape for decl in inputs}
     check_ref_map_types(leaf, producers, flow_input_shapes, flow_wiring, n_lines)
     # loop `'a -> 'a` shape contract (types): each carried field's seed-source Shape vs the
-    # body output's same-named field Shape (needs producers, so it runs alongside e06).
+    # body output's same-named field Shape (needs producers, so it runs alongside the
+    # cross-flow call/map type check above).
     check_loop_shape_contract(leaf, producers, flow_input_shapes, flow_wiring, n_lines)
 
     # Desugar each `case` to an CaseNode + its data/control edges.
