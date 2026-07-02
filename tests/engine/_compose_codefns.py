@@ -83,3 +83,11 @@ def double(inputs: dict) -> int:
 def echo_rid(inputs: dict) -> str:
     # surfaces the bound ${system.run_id} so the run test can assert on it.
     return inputs["rid"]
+
+
+# --- LOOP body CODE fns (Ollama-free while-loop e2e) ------------------------ #
+def loop_bump(inputs: dict) -> dict:
+    # a loop body 'a -> 'a over {n, exited}: increment n, set exited once n reaches 3.
+    # Drives the while-loop e2e (3 iterations from a {n:0, exited:false} seed).
+    n = inputs["n"] + 1
+    return {"n": n, "exited": n >= 3}
