@@ -784,7 +784,12 @@ class FlowEngine:
         NOTE (slice-1 limitation): does NOT stamp `_spawner_expansion`/`depth` on cloned
         spawner-eligible subnodes — slice-1 bodies are leaf-only (a `human_input` pause is a
         leaf, not a spawner). An AGENT-in-loop body (the `ac chat` case) will need that
-        stamping to route its pause segments; tracked in DEFER."""
+        stamping to route its pause segments; tracked in DEFER.
+
+        Unlike the other `_grow_*` helpers, this one does NOT call `finish_executing`/
+        `mark_node(EXPANDED)` on the spawner: the LOOP arm of `_apply_enqueue` already
+        finishes+marks the spawner once, and each subsequent iteration is grown from
+        `_loop_step` while the spawner stays EXPANDED — the re-clone must not re-mark it."""
         callsite = map_callsite(spawner_id, iteration)   # f"{spawner_id}#{iteration}"
         cloned = clone_child(child, callsite=callsite, record=record)
         with self.sm.lock:                               # append + register atomically
@@ -797,6 +802,10 @@ class FlowEngine:
         self.loop_alias[cloned.out_node_id] = spawner_id
         self.loop_iter[spawner_id] = iteration
         # Record this iteration's seed on the ledger entry (one slot per iteration grown).
+        # `children_per_iter` stays parallel to `records` (one slot per iteration, mirroring
+        # MapExpansion's `children_per_element`): slice-1 bodies are leaf-only so every slot
+        # stays [], but the slot is the documented durable-checkpoint shape for a future
+        # nested-spawner body — kept in lockstep now so durable replay needs no migration.
         while len(desc.records) <= iteration:
             desc.records.append(dict(record))
             desc.children_per_iter.append([])
@@ -808,7 +817,12 @@ class FlowEngine:
         """A loop body END (`filler_id`) fired with `next_record` (the body's output = the next
         carried record). Evaluate the loop's `while:` predicate on it and either CONTINUE (clone
         the next iteration) or STOP (commit the final carried record under the loop spawner and
-        advance its out-edges). Hitting `max_iters` is a located run failure."""
+        advance its out-edges). Hitting `max_iters` is a located run failure.
+
+        Raises:
+            NodeExecutionError: on the runaway guard (`"LoopMaxExceeded"`, next iteration would
+                reach `max_iters`), and when the final carried record fails the spawner's declared
+                `output_shape` on commit (wraps the `SegmentError` as the alias-commit tail does)."""
         spawner_id = self.loop_alias.pop(filler_id)
         loop = self.flow.nodes[spawner_id]
         self.sm.finish_executing(filler_id)

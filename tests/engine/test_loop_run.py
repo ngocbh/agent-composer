@@ -62,4 +62,10 @@ def test_while_loop_zero_iterations_commits_seed():
 def test_while_loop_max_exceeded_fails_run():
     result = run_flow(load_flow(MAXED), {})
     assert result.status != "succeeded"
-    assert "max" in (result.error or "").lower()
+    # Assert the runaway guard fired specifically — not just any error mentioning "max"
+    # (a `MAX_TOTAL_NODES` budget blowup also contains "max"). The guard message is
+    # `loop 'loop' exceeded max (2)`; the budget error says "exceeded node budget".
+    assert "exceeded max" in (result.error or "")
+    # And confirm the located error type reaches the RunFailed event.
+    error_types = {getattr(e, "error_type", None) for e in result.events}
+    assert "LoopMaxExceeded" in error_types
