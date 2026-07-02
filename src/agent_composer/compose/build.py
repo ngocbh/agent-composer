@@ -771,9 +771,6 @@ def build_loop_node(desc: LoopDescriptor, resolver: ChildResolver) -> tuple[Node
         child_inputs=child.input,
         child_asserts=child.asserts,
         child_source=child.source,        # render-only; the CLI nested-error traceback
-        predicate_kind="while",
-        predicate=desc.while_,
-        max_iters=desc.max,
         title=desc.node_name,
     )
     node.params = _sink_params(desc.inputs)
@@ -781,32 +778,50 @@ def build_loop_node(desc: LoopDescriptor, resolver: ChildResolver) -> tuple[Node
     node.output_shape = sig.output          # the body codomain == the carried record shape
 
     errors: list[str] = []
-    # Slice legality: `while:` selects the slice this build supports; `max:` is the
-    # required runaway guard for a while/until loop. `until:`/`times:` are parsed (the
-    # descriptor accepts them for the future slices) but not yet built — reject them
-    # explicitly so an author gets a clear "not supported" instead of a misleading
-    # "requires `while:`" (or a silently-ignored predicate).
-    unsupported = [k for k, v in (("until", desc.until_), ("times", desc.times)) if v is not None]
-    if unsupported:
+    # Predicate slice legality: exactly one of `while:`/`until:`/`times:` selects the loop's
+    # driver. `while`/`until` are PREDICATE loops (record-scoped boolean, `max:` runaway guard);
+    # `times: N` is a fixed COUNT (no predicate, `max:` redundant since the count bounds it). Bake
+    # `predicate_kind`/`predicate`/`times`/`max_iters` per the present kind below.
+    present = [k for k, v in (("while", desc.while_), ("until", desc.until_), ("times", desc.times)) if v is not None]
+    if len(present) != 1:
         errors.append(
-            f"loop node {desc.id!r}: {', '.join(repr(k) for k in unsupported)} not yet "
-            f"supported — only `while:` is built in this slice"
+            f"loop node {desc.id!r}: exactly one of while:/until:/times: is required "
+            f"(got {sorted(present)})"
         )
-    if desc.while_ is None:
-        errors.append(f"loop node {desc.id!r}: slice requires `while:`")
-    if desc.max is None:
-        errors.append(f"loop node {desc.id!r}: `max:` is required (runaway guard)")
-    elif not isinstance(desc.max, int) or isinstance(desc.max, bool):
-        # `max:` bounds the iteration COUNT, so it must be a plain integer. The descriptor is a
-        # bare dataclass (its `Optional[int]` annotation isn't enforced), so a YAML string/float
-        # passes through and would blow up the `< 1` compare or the runtime guard, and a YAML
-        # bool (an int subclass in Python) would silently read as 0/1. Reject any non-int type.
-        errors.append(f"loop node {desc.id!r}: `max:` must be an integer (got {desc.max!r})")
-    elif desc.max < 1:
-        # A runaway guard below 1 is nonsensical: the guard bounds the iteration COUNT, so it
-        # must permit at least one body run. Reject at the boundary rather than letting `max: 0`
-        # run one iteration and then fail with a confusing "exceeded max (0)".
-        errors.append(f"loop node {desc.id!r}: `max:` must be >= 1 (got {desc.max})")
+    elif present[0] in ("while", "until"):
+        kind = present[0]
+        node.predicate_kind = kind
+        node.predicate = desc.while_ if kind == "while" else desc.until_
+        node.max_iters = desc.max
+        if desc.max is None:
+            errors.append(f"loop node {desc.id!r}: `max:` is required (runaway guard)")
+        elif not isinstance(desc.max, int) or isinstance(desc.max, bool):
+            # `max:` bounds the iteration COUNT, so it must be a plain integer. The descriptor is a
+            # bare dataclass (its `Optional[int]` annotation isn't enforced), so a YAML string/float
+            # passes through and would blow up the `< 1` compare or the runtime guard, and a YAML
+            # bool (an int subclass in Python) would silently read as 0/1. Reject any non-int type.
+            errors.append(f"loop node {desc.id!r}: `max:` must be an integer (got {desc.max!r})")
+        elif desc.max < 1:
+            # A runaway guard below 1 is nonsensical: the guard bounds the iteration COUNT, so it
+            # must permit at least one body run. Reject at the boundary rather than letting `max: 0`
+            # run one iteration and then fail with a confusing "exceeded max (0)".
+            errors.append(f"loop node {desc.id!r}: `max:` must be >= 1 (got {desc.max})")
+    elif present[0] == "times":
+        # `times: N` is a fixed count: exactly N runs, no predicate. `max_iters` doubles as the
+        # count N so the runtime guard needs no `times`-special case. Same int/bool/`>= 1` guard as
+        # `max:` — the count must be a plain integer permitting at least one run.
+        node.predicate_kind = "times"
+        node.predicate = None
+        node.times = desc.times
+        node.max_iters = desc.times
+        if not isinstance(desc.times, int) or isinstance(desc.times, bool):
+            errors.append(f"loop node {desc.id!r}: `times:` must be an integer (got {desc.times!r})")
+        elif desc.times < 1:
+            errors.append(f"loop node {desc.id!r}: `times:` must be >= 1 (got {desc.times})")
+        if desc.max is not None:
+            errors.append(
+                f"loop node {desc.id!r}: max: is redundant with times: (times bounds the count)"
+            )
 
     # The `'a -> 'a` FIELD-NAME contract (types are the loader pass). The carried record's
     # keys are the seed `inputs:` names. The body OUTPUT field NAMES must equal them (the
@@ -832,16 +847,19 @@ def build_loop_node(desc: LoopDescriptor, resolver: ChildResolver) -> tuple[Node
             f"loop node {desc.id!r}: body input(s) {sorted(extra)} are not carried record "
             f"fields {sorted(carried)} (the body reads a subset of the carried record)"
         )
-    # `while:` predicate scope: the predicate is evaluated against the carried record
+    # `while:`/`until:` predicate scope: the predicate is evaluated against the carried record
     # (record-scoped `evaluate_when_record`), where the ONLY resolvable names are the carried
     # keys — an undeclared name silently resolves falsy and spins the loop to `max`. Reject a
     # predicate whose ref head isn't a carried field at load, so a typo is loud not a runaway.
-    if desc.while_:
-        heads = {m.split(".", 1)[0].strip() for m in re.findall(r"\$\{([^}]+)\}", desc.while_)}
+    # `times:` has no predicate, so skip it.
+    predicate_src = desc.while_ or desc.until_
+    if predicate_src:
+        pred_kw = "while" if desc.while_ else "until"
+        heads = {m.split(".", 1)[0].strip() for m in re.findall(r"\$\{([^}]+)\}", predicate_src)}
         unknown = sorted(heads - carried)
         if unknown:
             errors.append(
-                f"loop node {desc.id!r}: `while:` references unknown name(s) {unknown} — "
+                f"loop node {desc.id!r}: `{pred_kw}:` references unknown name(s) {unknown} — "
                 f"the predicate reads the carried record {sorted(carried)}"
             )
     if errors:

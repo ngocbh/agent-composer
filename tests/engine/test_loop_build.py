@@ -125,11 +125,17 @@ output: ${chat_loop.output}
 """
 
 
-# A `while:`-carrying loop that ALSO sets `until:` — a future-slice predicate the build
-# does not support yet. Must be rejected loudly, not silently ignored.
-BAD_UNSUPPORTED = GOOD.replace(
-    "    while: not ${exited}\n", "    while: not ${exited}\n    until: ${exited}\n"
-)
+# `until:` is a POST-check (do-while) predicate — same carried-record scope as `while:`,
+# `max:` still required. `times: N` is a fixed count — no predicate, `max:` redundant.
+UNTIL_GOOD = GOOD.replace("    while: not ${exited}\n", "    until: ${exited}\n")
+TIMES_GOOD = GOOD.replace("    while: not ${exited}\n    max: 5\n", "    times: 3\n")
+# Exactly one of while:/until:/times: — both-set and neither-set are illegal.
+BOTH = GOOD.replace("    while: not ${exited}\n", "    while: not ${exited}\n    until: ${exited}\n")
+NEITHER = GOOD.replace("    while: not ${exited}\n", "")
+# `times:` with `max:` is redundant (times bounds the count) -> rejected, not lenient-ignored.
+TIMES_WITH_MAX = GOOD.replace("    while: not ${exited}\n", "    times: 3\n")  # keeps max: 5
+# A fixed count must permit at least one run: `times: 0` is nonsensical.
+TIMES_BAD_COUNT = GOOD.replace("    while: not ${exited}\n    max: 5\n", "    times: 0\n")
 
 
 def test_good_loop_bakes_loopnode():
@@ -175,11 +181,34 @@ BAD_MAX_FLOAT = GOOD.replace("    max: 5\n", "    max: 2.5\n")
 BAD_MAX_BOOL = GOOD.replace("    max: 5\n", "    max: true\n")
 
 
-def test_unsupported_predicate_is_rejected():
+def test_until_loop_builds():
+    flow = load_flow(UNTIL_GOOD)
+    assert flow.compiled.nodes["chat_loop"].predicate_kind == "until"
+
+
+def test_times_loop_builds():
+    flow = load_flow(TIMES_GOOD)
+    n = flow.compiled.nodes["chat_loop"]
+    assert n.predicate_kind == "times" and n.times == 3 and n.max_iters == 3
+
+
+def test_exactly_one_predicate_required():
+    for bad in (BOTH, NEITHER):
+        with pytest.raises(LoadError) as e:
+            load_flow(bad)
+        assert "exactly one" in str(e.value).lower()
+
+
+def test_times_with_max_is_rejected():
     with pytest.raises(LoadError) as e:
-        load_flow(BAD_UNSUPPORTED)
-    assert "until" in str(e.value)
-    assert "while" in str(e.value)
+        load_flow(TIMES_WITH_MAX)
+    assert "redundant" in str(e.value).lower()
+
+
+def test_times_count_must_be_positive_int():
+    with pytest.raises(LoadError) as e:
+        load_flow(TIMES_BAD_COUNT)
+    assert "times" in str(e.value).lower()
 
 
 def test_max_below_one_is_rejected():

@@ -1,4 +1,4 @@
-"""LoopNode — the `while:`/`until:`/`times:` driver (slice 1: `while:`).
+"""LoopNode — the `while:`/`until:`/`times:` driver.
 
 A driver node (like CallNode): `run` returns an `Enqueue` of the baked body child seeded with the
 carried record; the engine's `_apply_enqueue`/`_loop_step` own the predicate + re-clone loop-back.
@@ -15,9 +15,11 @@ class LoopNode(Node):
     Fields (baked at load by `compose.build.build_loop_node`):
       child          the compiled body subflow (the `'a -> 'a` callable); the Enqueue target.
       child_inputs   the body's declared input decls (subset of the carried record).
-      predicate_kind "while" (slice 1). "until"/"times" reserved for later slices.
-      predicate      the `while:` boolean source, e.g. "not ${exited}" (bare = carried-record scope).
-      max_iters      the runaway guard (required for while/until).
+      predicate_kind one of "while" | "until" | "times".
+      predicate      the boolean source for `while`/`until`, e.g. "not ${exited}" (bare =
+                     carried-record scope); None for `times` (no predicate).
+      times          the fixed run count when `predicate_kind == "times"`; None otherwise.
+      max_iters      the runaway guard for `while`/`until`; for `times`, equals the count N.
     """
 
     kind = NodeKind.LOOP
@@ -34,6 +36,7 @@ class LoopNode(Node):
         child_source: Any = None,
         predicate_kind: str = "while",
         predicate: Optional[str] = None,
+        times: Optional[int] = None,
         max_iters: Optional[int] = None,
         title: Optional[str] = None,
     ) -> None:
@@ -46,6 +49,7 @@ class LoopNode(Node):
         self.child_source = child_source
         self.predicate_kind = predicate_kind
         self.predicate = predicate
+        self.times = times
         self.max_iters = max_iters
 
     def run(self, inputs: dict[str, Any], **caps: Any):
