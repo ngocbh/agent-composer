@@ -368,12 +368,13 @@ each:
     ticker: ${item}
 ```
 
-### `loop` — iterate a body until a predicate goes false
+### `loop` — re-run a body under a predicate or a fixed count
 
 `loop` runs a child flow (the **body**) over and over, threading one **carried
-record** from each iteration into the next. It is the engine's `while`: the body
-maps the carried record to the *next* carried record (`'a -> 'a`), and the loop
-re-runs it while a predicate holds.
+record** from each iteration into the next. It is the engine's `while`/`do-while`/
+`for`: the body maps the carried record to the *next* carried record (`'a -> 'a`),
+and the loop re-runs it under one of three drivers — a pre-check predicate
+(`while:`), a post-check predicate (`until:`), or a fixed count (`times:`).
 
 ```yaml
 turn:
@@ -391,25 +392,56 @@ turn:
   the carried record (`'a -> 'a`), and the fields the body reads (`${input.X}`)
   must be a subset of the carried names. This contract is checked twice: field
   **names** at build, field **types** at load.
-- **`while:`** is a **pre-check** predicate evaluated on the carried record before
-  each iteration (0 iterations run if the seed already fails it). It is a
-  record-scoped boolean over bare `${name}` refs — every ref must name a **carried
-  record field** (a typo'd name is rejected at load, not silently read as falsy) —
-  and, like every condition, **`not` sits OUTSIDE the `${...}` span**: write
-  `while: not ${exited}`, never `while: ${not exited}`.
-- **`max:`** is a **required** runaway guard — a plain integer `>= 1`: if the loop
-  would run more than `max` iterations the run fails loudly (`LoopMaxExceeded`).
+- **Exactly one** of `while:` / `until:` / `times:` per loop node selects the
+  driver. Zero or more than one is a load-time error (`exactly one of
+  while:/until:/times: is required`).
+
+**`while:` — pre-check (0+ runs).** A predicate evaluated on the carried record
+*before* each iteration; 0 iterations run if the seed already fails it. It is a
+record-scoped boolean over bare `${name}` refs — every ref must name a **carried
+record field** (a typo'd name is rejected at load, not silently read as falsy) —
+and, like every condition, **`not` sits OUTSIDE the `${...}` span**: write
+`while: not ${exited}`, never `while: ${not exited}`. **`max:` is required.**
+
+**`until:` — post-check / do-while (1+ runs).** Same record-scoped predicate
+syntax as `while:` (bare `${name}`, `not` outside the span), but checked *after*
+each iteration: the body always runs at least once, and the loop **continues
+while the predicate is FALSE and stops the moment it becomes TRUE**. **`max:` is
+required.**
+
+```yaml
+retry:
+  kind: loop
+  call: attempt
+  input:
+    ok: false
+  until: ${ok}                 # post-check; runs once, then stops when ok is true
+  max: 5                       # required runaway guard
+```
+
+**`times: N` — fixed count.** The body runs exactly `N` times, with no predicate.
+`N` must be a plain integer `>= 1`. **`max:` is redundant here and REJECTED** — the
+count already bounds the loop, so supplying both is a load-time error (`max: is
+redundant with times:`).
+
+```yaml
+poll:
+  kind: loop
+  call: step
+  input:
+    n: 0
+  times: 3                     # exactly 3 runs; do NOT also give max:
+```
+
+- **`max:`** (for `while:`/`until:`) is a **required** runaway guard — a plain
+  integer `>= 1`: if the loop would run more than `max` iterations the run fails
+  loudly (`LoopMaxExceeded`).
 
 The node's value is the final carried record (committed under the loop node's id
-once the predicate goes false).
+once the loop stops).
 
 A body may itself pause (e.g. a `human_input` leaf): the run suspends mid-loop and
 resumes into the next iteration — this is the shape a chat REPL takes.
-
-> **Slice 1 is `while:`-only and in-process.** `until:`/`times:` are parsed but
-> not yet built (they raise a clear "not supported" at load), and durable
-> cross-process resume of a live loop is deferred — a paused loop resumes within
-> the same process.
 
 ## Effects from inside an agent — the `ask_user` control
 

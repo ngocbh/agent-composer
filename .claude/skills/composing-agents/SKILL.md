@@ -280,9 +280,10 @@ turn:
 The body's `output:` shape must **equal** the carried record and read only a
 **subset** of its names (`'a -> 'a`) — names checked at build, types at load. The
 node's value is the final carried record. A body that pauses (a `human_input` leaf)
-makes the loop a chat REPL: run/resume threads each turn. **Slice 1 is `while:`-only
-and in-process** — `until:`/`times:` parse but raise "not supported"; durable
-cross-process resume of a live loop is deferred.
+makes the loop a chat REPL: run/resume threads each turn. Pick **exactly one**
+driver: `while:` (pre-check, 0+ runs), `until:` (post-check / do-while, 1+ runs,
+stop when the predicate becomes true), or `times: N` (fixed count). `max:` is
+required for `while:`/`until:` but **redundant and rejected** with `times:`.
 
 ## Run-ordering without data (`depends_on` / `runs_after`)
 Both gate a node on another **settling** even when no value flows. `depends_on:

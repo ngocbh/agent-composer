@@ -13,8 +13,10 @@
 #       messages = inputs["messages"] + [inputs["msg"]]
 #       return {"messages": messages, "exited": inputs["msg"] == "bye"}
 #
-# Slice 1 is `while:`-only and in-process: `until:`/`times:` parse but aren't built
-# yet, and durable cross-process resume of a live loop is deferred.
+# Pick EXACTLY ONE driver per loop node:
+#   while: not ${exited}   # PRE-check: 0+ runs, stop when the predicate goes false; max: required
+#   until: ${exited}       # POST-check / do-while: 1+ runs, stop when the predicate becomes true; max: required
+#   times: 3               # fixed COUNT: exactly 3 runs, no predicate; max: is REDUNDANT and rejected
 
 id: loop
 name: loop

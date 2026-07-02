@@ -108,13 +108,16 @@ keyed by each question's `header`.
 `uses: <alias>: <filename>`, and `call:` it (once) or `map:` it (per list element).
 Reference its object fields downstream as `${node.output.field}`.
 
-**Loop until done.** Use a `loop` node to re-run a body while a predicate holds (the
-engine's `while`). The `input:` is the SEED carried record; the body maps it to the
-NEXT carried record (`'a -> 'a` — same `output:` shape as `input:`), and `while: not
-${done}` is a pre-check over the carried record (`not` OUTSIDE the `${...}` span).
-`max:` is a required runaway guard. A body that pauses (a `human_input` leaf) makes
-the loop a chat REPL — run/resume threads each turn. See `loop.yaml`. Slice 1 is
-`while:`-only and in-process.
+**Loop until done.** Use a `loop` node to re-run a body under one of three drivers,
+threading a carried record `'a -> 'a` (the body's `output:` shape EQUALS its
+`input:`). The `input:` is the SEED carried record. Pick EXACTLY ONE driver:
+`while: not ${done}` is a PRE-check over the carried record (0+ runs, stop when the
+predicate goes false); `until: ${done}` is a POST-check / do-while (1+ runs, stop
+when the predicate becomes TRUE); `times: N` runs exactly N times with no
+predicate. `not` sits OUTSIDE the `${...}` span. `max:` is a required runaway guard
+for `while:`/`until:` — but REDUNDANT and REJECTED with `times:`. A body that pauses
+(a `human_input` leaf) makes the loop a chat REPL — run/resume threads each turn.
+See `loop.yaml`.
 
 ## Gotchas
 
@@ -139,10 +142,11 @@ the loop a chat REPL — run/resume threads each turn. See `loop.yaml`. Slice 1 
   `code` for deterministic compute.
 - **`loop` bodies must be `'a -> 'a`.** The body's `output:` shape must EQUAL the
   loop's `input:` (carried record) and read only a subset of its names — checked at
-  build (names) and load (types). `while:`/`max:` are required in this slice;
-  `until:`/`times:` parse but raise "not supported" at load. Every `while:` ref must
-  name a carried field (a typo is rejected at load, not read as falsy), and `max:`
-  must be a plain integer `>= 1`.
+  build (names) and load (types). Give EXACTLY ONE driver: `while:` (pre-check,
+  0+ runs), `until:` (post-check / do-while, 1+ runs), or `times: N` (fixed count).
+  `max:` is required for `while:`/`until:` but REDUNDANT+REJECTED with `times:`.
+  Every `while:`/`until:` ref must name a carried field (a typo is rejected at load,
+  not read as falsy), and `max:`/`times:` must be a plain integer `>= 1`.
 - **Node-local `asserts:` reading `${output}` are POST checks** — they fire once the
   node's value is committed, and fail the run loudly on a false/raising expr. This
   includes a `call` node: its POST asserts may read `${output}` **and** the call's
