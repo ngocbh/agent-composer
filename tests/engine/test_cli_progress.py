@@ -87,6 +87,7 @@ def test_cli_accepts_verbose_flag(monkeypatch, tmp_path):
         return RunResult(input={}, status="succeeded", output="hello")
 
     monkeypatch.setattr(climod, "run_flow", fake_run_flow)
+    monkeypatch.setattr(climod, "_ensure_provider_keys", lambda *a, **k: None)
     f = tmp_path / "f.yaml"
     f.write_text(_FLOW)
     res = CliRunner().invoke(_app(), [str(f), "--verbose"])
@@ -102,6 +103,7 @@ def test_cli_quiet_suppresses_events(monkeypatch, tmp_path):
         return RunResult(input={}, status="succeeded", output="hello")
 
     monkeypatch.setattr(climod, "run_flow", fake_run_flow)
+    monkeypatch.setattr(climod, "_ensure_provider_keys", lambda *a, **k: None)
     f = tmp_path / "f.yaml"
     f.write_text(_FLOW)
     res = CliRunner().invoke(_app(), [str(f), "--quiet"])
@@ -118,6 +120,7 @@ def test_cli_num_workers_threads_through(monkeypatch, tmp_path):
         return RunResult(input={}, status="succeeded", output="hello")
 
     monkeypatch.setattr(climod, "run_flow", fake_run_flow)
+    monkeypatch.setattr(climod, "_ensure_provider_keys", lambda *a, **k: None)
     f = tmp_path / "f.yaml"
     f.write_text(_FLOW)
 

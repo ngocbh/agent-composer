@@ -719,6 +719,72 @@ def _resume_to_terminal(
     return result
 
 
+def _agent_providers(loaded, cli_cfg: Dict[str, Any]) -> List[str]:
+    """Collect the distinct effective LLM providers of every agent node in `loaded`.
+
+    Resolves the `llm_config` cascade (with `cli_cfg` as the outermost gap-fill layer)
+    on a throwaway copy of the compiled flow — so the live flow is untouched — then walks
+    the whole static call tree (top-level nodes plus every `call`/`map`/`loop` body child)
+    reading each agent node's baked provider. A node that still names no provider falls
+    back to the CLI override then the process default, matching what generation resolves.
+
+    Args:
+        loaded (`LoadedFlow`):
+            The compiled flow whose agent providers to enumerate.
+        cli_cfg (`dict[str, Any]`):
+            The `--provider`/`--model` CLI layer (may be empty) — the cascade's
+            outermost gap-fill layer and the provider fallback.
+
+    Returns:
+        `List[str]`:
+            The distinct provider names, in first-seen order.
+    """
+    import copy
+
+    from agent_composer._settings import default_llm_provider
+    from agent_composer.compile.llm_cascade import resolve_llm_cascade
+    from agent_composer.nodes.agent import AgentNode
+
+    probe = copy.deepcopy(loaded.compiled)
+    resolve_llm_cascade(probe, dict(cli_cfg))
+    fallback = cli_cfg.get("provider") or default_llm_provider()
+
+    seen: List[str] = []
+
+    def _walk(flow) -> None:
+        for node in flow.nodes.values():
+            if isinstance(node, AgentNode):
+                prov = (node.llm_config or {}).get("provider") or fallback
+                if prov not in seen:
+                    seen.append(prov)
+            child = getattr(node, "child", None)
+            if child is not None and hasattr(child, "nodes"):
+                _walk(child)
+
+    _walk(probe)
+    return seen
+
+
+def _ensure_provider_keys(loaded, cli_cfg: Dict[str, Any]) -> None:
+    """Prompt for any API key the flow's agents will need, before the run starts.
+
+    Turns a cryptic mid-run "missing key" API failure into an upfront interactive
+    prompt. Keyless (`ollama`) and unknown providers are skipped inside
+    [`ensure_api_key`][agent_composer.cli.utils.ensure_api_key]; a required-but-missing
+    key with no TTY re-raises the `RuntimeError` for `run` to surface cleanly.
+
+    Args:
+        loaded (`LoadedFlow`):
+            The compiled flow whose agents' providers determine the keys to check.
+        cli_cfg (`dict[str, Any]`):
+            The `--provider`/`--model` CLI layer, threaded into provider resolution.
+    """
+    from agent_composer.cli.utils import ensure_api_key
+
+    for provider in _agent_providers(loaded, cli_cfg):
+        ensure_api_key(provider)
+
+
 def run(
     flow: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True, help="Path to a flow .yaml"),
     input: List[str] = typer.Option(  # noqa: A002 - matches the user-facing flag name
@@ -793,6 +859,14 @@ def run(
     # The CLI flags supply the OUTERMOST cascade layer (fill-the-gap), not a hard override:
     # an agent's own llm_config and a flow-level llm_config: still win per field.
     cli_cfg = {k: v for k, v in {"provider": provider, "model": model}.items() if v}
+    # Pre-flight: prompt for any API key the flow's agents will need, so a missing key
+    # is an upfront prompt (or a clean error when non-interactive) rather than a cryptic
+    # failure on the first model call mid-run.
+    try:
+        _ensure_provider_keys(loaded, cli_cfg)
+    except RuntimeError as exc:
+        err_console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1)
     if not quiet:
         reporter.start()
     try:
