@@ -39,6 +39,13 @@ under "Roadmap".
 
 - [ ] add isinstance(${var}, Shape) type check builtin function so the assert can check the shape again if needed @ngocbh
 
+- [ ] nested flow definition. or inline definition for MAP, LOOP etc? so instead of defining a flow and then call, we just define it inside MAP node definition directly instead of defining it outside and then call later? it's just a surface, we desugar it to a new flow behind the scene?
+
+- [ ] list append, add, operation etc is now impossible via our flow design. We should be able to support simple function/operations inside ${}. There should be a way to make it general
+
+- [ ] sometimes I see Shape sometimes I see Segment. What are the differences among them? should we unify them?
+
+
 ## Structured AGENT output — follow-ups
 
 The core structured-output work (declare → generate → enforce → retry) shipped; see
