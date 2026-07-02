@@ -821,13 +821,30 @@ class FlowEngine:
 
         Raises:
             NodeExecutionError: on the runaway guard (`"LoopMaxExceeded"`, next iteration would
-                reach `max_iters`), and when the final carried record fails the spawner's declared
-                `output_shape` on commit (wraps the `SegmentError` as the alias-commit tail does)."""
+                reach `max_iters`); when the final carried record fails the spawner's declared
+                `output_shape` on commit (wraps the `SegmentError` as the alias-commit tail does);
+                and as the boundary wrap for any predicate-eval or `_grow_loop` raise (a runtime
+                predicate error or the node-budget guard) — always a `NodeExecutionError` so
+                `run()` yields `RunFailed`, never an uncaught escape."""
         spawner_id = self.loop_alias.pop(filler_id)
         loop = self.flow.nodes[spawner_id]
         self.sm.finish_executing(filler_id)
         from agent_composer.expr.expressions import evaluate_when_record
-        if evaluate_when_record(loop.predicate, next_record):
+        # Predicate eval and iteration growth run OUTSIDE eval_node's try/except (like
+        # _apply_enqueue), so any raise here would escape run() uncaught. Wrap both: a
+        # predicate ExpressionError (a runtime type error on the carried record) and the
+        # _grow_loop budget RuntimeError become NodeExecutionError -> RunFailed. The
+        # intentional located raises (max guard, commit SegmentError) pass straight through.
+        try:
+            cont = evaluate_when_record(loop.predicate, next_record)
+        except NodeExecutionError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — boundary: any predicate error -> RunFailed
+            raise NodeExecutionError(
+                spawner_id, str(exc), type(exc).__name__,
+                locator=SourceSpan(node=spawner_id, kind="field", key="while"),
+            )
+        if cont:
             nxt = self.loop_iter[spawner_id] + 1
             if nxt >= loop.max_iters:
                 raise NodeExecutionError(
@@ -835,7 +852,13 @@ class FlowEngine:
                     "LoopMaxExceeded",
                     locator=SourceSpan(node=spawner_id, kind="field", key="max"),
                 )
-            self._grow_loop(spawner_id, loop.child, next_record, nxt, self.loop_desc[spawner_id])
+            try:
+                self._grow_loop(
+                    spawner_id, loop.child, next_record, nxt, self.loop_desc[spawner_id])
+            except NodeExecutionError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — boundary: any grow error -> RunFailed
+                raise NodeExecutionError(spawner_id, str(exc), type(exc).__name__)
             return
         # Predicate false: terminate. Commit the final carried record under the spawner id
         # (same SegmentError -> NodeExecutionError guard the alias-commit tail uses) and fire

@@ -99,3 +99,12 @@ def chat_fold(inputs: dict) -> dict:
     # pause/resume-per-turn e2e (a human_input leaf feeds `msg` each iteration).
     messages = inputs["messages"] + [inputs["msg"]]
     return {"messages": messages, "exited": inputs["msg"] == "bye"}
+
+
+def loop_countdown(inputs: dict) -> dict:
+    # decrements the carried n. Drives a loop whose `while:` predicate divides by n
+    # (`10 / ${n} > 0`), so the predicate RAISES (division by zero) once n reaches 0 on
+    # a later iteration — the engine must convert that predicate error into a failed run,
+    # not let it escape run() uncaught.
+    return {"n": inputs["n"] - 1}
+

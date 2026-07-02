@@ -2,8 +2,9 @@
 
 The loop carries `{n, exited}`, runs the body `bump` (`{n, exited} -> {n: n+1, exited: n+1>=3}`)
 while `not ${exited}`, and terminates when the predicate goes false. Covers the multi-iteration
-happy path, the turn-0 (0-iteration) case (seed already satisfies exit), and the max-exceeded
-runaway guard.
+happy path, the turn-0 (0-iteration) case (seed already satisfies exit), the max-exceeded
+runaway guard, and the error boundary — a `while:` predicate that raises at runtime and a
+node-budget blowup driven from `_loop_step` both become failed runs, never uncaught escapes.
 """
 
 from agent_composer.compose.loader import load_flow
@@ -145,3 +146,59 @@ def test_loop_feeding_downstream_node_commits_and_advances():
     result = run_flow(load_flow(DOWNSTREAM), {})
     assert result.status == "succeeded", result.error
     assert result.output == 6          # loop ends at n=3; double(3) = 6
+
+
+# The `while:` predicate is evaluated OUTSIDE eval_node's try/except (in `_loop_step` for
+# iterations >= 1). A predicate that raises at runtime must become a FAILED run, never an
+# uncaught escape from run(). Here the predicate divides by the carried `n` (`10 / ${n} > 0`)
+# and the body counts n down: the seed pre-check (n=2) and iteration-0 check (n=1) pass, then
+# iteration-1's check divides by 0 -> the predicate raises inside `_loop_step`.
+PREDICATE_RAISES = """
+id: pred-raise
+name: pred_raise
+defs:
+  down:
+    input:
+      n: int
+    nodes:
+      step:
+        kind: code
+        code: tests.engine._compose_codefns:loop_countdown
+        input:
+          n: ${input.n}
+        output:
+          n: int
+    output: ${step.output}
+nodes:
+  loop:
+    kind: loop
+    call: down
+    input:
+      n: 2
+    while: 10 / ${n} > 0
+    max: 10
+output: ${loop.output}
+"""
+
+
+def test_while_loop_predicate_runtime_error_fails_run():
+    # Must NOT raise out of run_flow; the predicate's division-by-zero on iteration 1 is
+    # converted to a located run failure at the loop's `while:`.
+    result = run_flow(load_flow(PREDICATE_RAISES), {})
+    assert result.status != "succeeded"
+    assert "division by zero" in (result.error or "")
+
+
+def test_loop_budget_exceeded_in_step_fails_run(monkeypatch):
+    # The node-budget guard inside `_grow_loop` raises a RuntimeError; when that grow is
+    # driven from `_loop_step` (iteration >= 1) it must become a failed run, not an uncaught
+    # escape. The COUNTER flow adds 3 nodes/iteration off a base of 3 (iter0 -> 6, iter1 -> 9),
+    # so a budget of 6 lets iteration 0 grow (via the already-wrapped enqueue path) and trips
+    # iteration 1 inside `_loop_step` — exercising the `_loop_step` boundary specifically.
+    import agent_composer.runtime.engine as engine_mod
+
+    monkeypatch.setattr(engine_mod, "MAX_TOTAL_NODES", 6)
+    result = run_flow(load_flow(COUNTER), {})
+    assert result.status != "succeeded"
+    assert "node budget" in (result.error or "")
+
