@@ -55,6 +55,19 @@ class StateManager:
             for edge in edges:
                 self.edge_state.setdefault(edge.id, NodeState.UNKNOWN)
 
+    def drop(self, node_ids: set[str], edge_ids: set[str]) -> None:
+        """Runtime overlay: remove node/edge state for a pruned sub-namespace, the
+        inverse of `register`. Clears the pruned ids from every per-node structure
+        (`node_state`, `executing`) and per-edge structure (`edge_state`) so no
+        structure keys on a dropped id after this returns (a finished loop iteration's
+        `#i` overlay is dropped from the live graph)."""
+        with self.lock:
+            for nid in node_ids:
+                self.node_state.pop(nid, None)
+                self.executing.discard(nid)
+            for eid in edge_ids:
+                self.edge_state.pop(eid, None)
+
     # --- executing-set ------------------------------------------------------ #
 
     def add_executing(self, node_id: str) -> None:
